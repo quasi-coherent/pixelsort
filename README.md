@@ -1,2 +1,2 @@
 # pixelsort
-[sorted](test-L.jpg)
+![sorted](test-L.jpg)
