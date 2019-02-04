@@ -1,0 +1,40 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 21cf1ee1fd182c20c9ff49ce689b87914525e9e3de19adc111d89133c7843e63
+
+name:           pixelsort
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/quasi-coherent/pixelsort#readme>
+homepage:       https://github.com/quasi-coherent/pixelsort#readme
+bug-reports:    https://github.com/quasi-coherent/pixelsort/issues
+author:         Daniel Donohue
+maintainer:     ddonohue@earnestresearch.com
+copyright:      2019 Daniel Donohue
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/quasi-coherent/pixelsort
+
+executable pixelsort
+  main-is: Main.hs
+  other-modules:
+      Paths_pixelsort
+  hs-source-dirs:
+      ./.
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      JuicyPixels
+    , base >=4.7 && <5
+    , bytestring
+    , optparse-applicative
+    , vector
+  default-language: Haskell2010
