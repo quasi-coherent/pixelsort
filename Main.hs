@@ -5,6 +5,7 @@ module Main where
 
 import           Codec.Picture
 import           Codec.Picture.Types
+import           Control.Monad (when)
 import           Control.Monad.ST
 import           Data.Ord
 import qualified Data.Vector as V
@@ -18,7 +19,10 @@ main :: IO ()
 main = do
   opts@Opts {..} <- execParser optsParser
   orig <- either (error "Couldn't read image") convertRGB8 <$> readImage oImgPath
-  writePng ("sorted-" <> oImgPath) $ makeSortedImage (userSortChoice opts) orig
+  when oRed (writePng ("sorted-r-" <> oImgPath) $ makeSortedImage compareRed orig)
+  when oGreen (writePng ("sorted-g-" <> oImgPath) $ makeSortedImage compareGreen orig)
+  when oBlue (writePng ("sorted-b-" <> oImgPath) $ makeSortedImage compareBlue orig)
+  when oLuminance (writePng ("sorted-L-" <> oImgPath) $ makeSortedImage compareLuminance orig)
   where
     optsParser = info (helper <*> parseOpts) (header "pixelsort")
 
