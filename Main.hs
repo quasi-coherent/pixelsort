@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns    #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
@@ -5,20 +6,19 @@ module Main where
 import           Codec.Picture
 import           Codec.Picture.Types
 import           Control.Monad.ST
-import qualified Data.List as List
-import qualified Data.Vector.Storable as V
+import           Data.Ord
+import qualified Data.Vector as V
+import qualified Data.Vector.Algorithms.Intro as VA
+import qualified Data.Vector.Storable as VS
+import           Data.Word (Word8)
 import           Options.Applicative
 
 
 main :: IO ()
 main = do
   opts@Opts {..} <- execParser optsParser
-  orig <- either (error "Couldn't read image") convertRGB8 <$> readImage optImgPath
-  let tbl = pixelSorter opts $ makeTabRep orig
-      new = fillCanvas (Canvas (imageWidth orig) (imageHeight orig)) tbl
-
-  writePng ("sorted-" <> optImgPath) new
-
+  orig <- either (error "Couldn't read image") convertRGB8 <$> readImage oImgPath
+  writePng ("sorted-" <> oImgPath) $ makeSortedImage (userSortChoice opts) orig
   where
     optsParser = info (helper <*> parseOpts) (header "pixelsort")
 
@@ -30,110 +30,82 @@ main = do
       <*> switch (short 'L' <> help "Sort by luminance")
 
 
+-- | CLI.
 data Opts = Opts
-  { optImgPath   :: FilePath
-  , optRed       :: Bool
-  , optGreen     :: Bool
-  , optBlue      :: Bool
-  , optLuminance :: Bool
+  { oImgPath   :: FilePath
+  , oRed       :: Bool
+  , oGreen     :: Bool
+  , oBlue      :: Bool
+  , oLuminance :: Bool
   } deriving (Eq, Show)
 
 
----------------------------------------------------------
--- Drawing images
----------------------------------------------------------
-
-
--- | A blank canvas.
-data Canvas = Canvas
-  { cWidth  :: Int
-  , cHeight :: Int
-  } deriving (Eq, Show)
-
-
--- | Tabular representation of an image.
-type TabRep = [[PixelRGB8]]
-
-
--- | Create an image from a table of pixels.
-fillCanvas :: Canvas -> TabRep -> Image PixelRGB8
-fillCanvas Canvas {..} tbl = runST $ do
-  mimg <- newMutableImage cWidth cHeight
-  go 0 0 mimg
+-- | Sort the image with the given ordering.
+makeSortedImage :: PixelOrdering -> Image PixelRGB8 -> Image PixelRGB8
+makeSortedImage f Image {..} = runST $ do
+  mimg <- newMutableImage imageWidth imageHeight
+  go 0 imageData mimg
   where
-    go x y mimg
-        | x >= cWidth  = go 0 (y+1) mimg
-        | y >= cHeight = unsafeFreezeImage mimg
-        | otherwise = do
-            writePixel mimg x y ((tbl !! x) !! y)
-            go (x+1) y mimg
+    go r d mimg
+      | r >= imageHeight = unsafeFreezeImage mimg
+      | otherwise = do
+          let row = makeRow (3*imageWidth) (VS.take (3*imageWidth) d)
+              sortedRow = V.modify (VA.sortBy f) row
+          writeRow 0 r sortedRow mimg
+          go (r+1) (VS.drop (3*imageWidth) d) mimg
+
+    writeRow c r v mimg
+      | c >= imageWidth = unsafeFreezeImage mimg
+      | otherwise = do
+          writePixel mimg c r (v V.! c)
+          writeRow (c+1) r v mimg
 
 
--- | Represent an image as a list of lists of RGB pixels.
-makeTabRep :: Image PixelRGB8 -> TabRep
-makeTabRep img = go [] (imageHeight img) (imageWidth img) (imageData img)
+-- | Make one row of 'PixelRGB8's from the image's raw representation.
+makeRow :: Int -> VS.Vector Word8 -> V.Vector PixelRGB8
+makeRow = go V.empty
   where
-    -- Make lists of rows
-    go acc 0 _ _ = acc
-    go acc h w d =
-      go (acc <> [makeRow w (V.take (3*w) d)]) (h-1) w (V.drop (3*w) d)
+    go !acc !w !d
+      | w == 0    = acc
+      | otherwise = go (acc V.++ makePixel (VS.take 3 d)) (w-3) (VS.drop 3 d)
 
-    -- Make one row
-    makeRow w = go [] (3*w)
-      where
-        go acc 0 _ = acc
-        go acc w d =
-          go (acc <> makePixel (V.toList $ V.take 3 d)) (w-3) (V.drop 3 d)
-
-        makePixel [r, g, b] = [PixelRGB8 r g b]
+    makePixel d = V.singleton (PixelRGB8 (d VS.! 0) (d VS.! 1) (d VS.! 2))
 
 
----------------------------------------------------------
--- Sorting pixels
----------------------------------------------------------
-
-
--- | Comparing pixels.
+-- | How to arrange pixels.
 type PixelOrdering = PixelRGB8 -> PixelRGB8 -> Ordering
 
 
--- | Convert CLI options to a transformation of a tabular representation of an image.
-pixelSorter :: Opts -> (TabRep -> TabRep)
-pixelSorter = foldr (.) id . userSortChoice
-
-
--- | Sort a decomposition by a given ordering.
-sortBy :: PixelOrdering -> TabRep -> TabRep
-sortBy = fmap . List.sortBy
-
-
--- | User supplied flags to corresponding sort functions.
-userSortChoice :: Opts -> [TabRep -> TabRep]
-userSortChoice Opts {..} = zipWith (\o f -> if o then f else id) opts pixelSort
+-- | Composition of user sort choices.
+userSortChoice :: Opts -> PixelOrdering
+userSortChoice Opts {..} = if length userOpts /= 1
+  then error "Only one option can be supplied at a time"
+  else head userOpts
   where
-    opts = [optRed, optGreen, optBlue, optLuminance]
-    pixelSort = sortBy <$> [compareRed, compareBlue, compareGreen, compareLuminance]
+    os = [oRed, oGreen, oBlue, oLuminance]
+    fs = [compareRed, compareGreen, compareBlue, compareLuminance]
+    userOpts = [f | (o, f) <- zip os fs, o]
 
 
 -- | Which pixel is more red.
-compareRed :: PixelRGB8 -> PixelRGB8 -> Ordering
+compareRed :: PixelOrdering
 compareRed (PixelRGB8 r1 _ _) (PixelRGB8 r2 _ _) = compare r1 r2
 
 
 -- | Which pixel is more green.
-compareGreen :: PixelRGB8 -> PixelRGB8 -> Ordering
+compareGreen :: PixelOrdering
 compareGreen (PixelRGB8 _ g1 _) (PixelRGB8 _ g2 _) = compare g1 g2
 
 
 -- | Which pixel is more blue.
-compareBlue :: PixelRGB8 -> PixelRGB8 -> Ordering
+compareBlue :: PixelOrdering
 compareBlue (PixelRGB8 _ _ b1) (PixelRGB8 _ _ b2) = compare b1 b2
 
 
 -- | Which pixel is brighter.
 --
 -- https://en.wikipedia.org/wiki/Relative_luminance
-compareLuminance :: PixelRGB8 -> PixelRGB8 -> Ordering
+compareLuminance :: PixelOrdering
 compareLuminance a b = compare (relativeLuminance a) (relativeLuminance b)
   where
     relativeLuminance (PixelRGB8 r g b)

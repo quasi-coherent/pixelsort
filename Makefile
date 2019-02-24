@@ -23,4 +23,7 @@ build: $(BIN_DIR) ## Make distribution
 	stack build $(STACK_OPTS)
 	hlint Main.hs
 	stylish-haskell -i Main.hs
-	cp .stack-work/install/x86_64-${OS}/${LTS}/${GHC_VER}/bin/pixelsort $(BIN_DIR)/pixelsort-${OS}
+	cp .stack-work/install/x86_64-${OS}/${LTS}/${GHC_VER}/bin/pixelsort $(BIN_DIR)/pixelsort
+
+devel: ## Low-featured GHC-based IDE
+	ghcid --command "stack ghci pixelsort"

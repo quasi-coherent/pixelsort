@@ -3,7 +3,7 @@ version:             0.1.0.0
 github:              "quasi-coherent/pixelsort"
 license:             BSD3
 author:              "Daniel Donohue"
-maintainer:          "ddonohue@earnestresearch.com"
+maintainer:          "d.michael.donohue@gmail.com"
 copyright:           "2019 Daniel Donohue"
 
 extra-source-files:
@@ -25,3 +25,4 @@ executables:
     - JuicyPixels
     - optparse-applicative
     - vector
+    - vector-algorithms

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 21cf1ee1fd182c20c9ff49ce689b87914525e9e3de19adc111d89133c7843e63
+-- hash: 3ba3fe356c3dda50b9edf989ccffd7ed6f302c80cb773348ce678653a7efcbc6
 
 name:           pixelsort
 version:        0.1.0.0
@@ -12,7 +12,7 @@ description:    Please see the README on GitHub at <https://github.com/quasi-coh
 homepage:       https://github.com/quasi-coherent/pixelsort#readme
 bug-reports:    https://github.com/quasi-coherent/pixelsort/issues
 author:         Daniel Donohue
-maintainer:     ddonohue@earnestresearch.com
+maintainer:     d.michael.donohue@gmail.com
 copyright:      2019 Daniel Donohue
 license:        BSD3
 license-file:   LICENSE
@@ -37,4 +37,5 @@ executable pixelsort
     , bytestring
     , optparse-applicative
     , vector
+    , vector-algorithms
   default-language: Haskell2010
