@@ -59,16 +59,16 @@ makeSortedImage f Image {..} = runST $ do
     go r d mimg
       | r >= imageHeight = unsafeFreezeImage mimg
       | otherwise = do
-          let row = makeRow (4*imageWidth) (VS.take (4*imageWidth) d)
+          let row = makeRow (4 * imageWidth) (VS.take (4 * imageWidth) d)
               sortedRow = V.modify (VA.sortBy f) row
           writeRow 0 r sortedRow mimg
-          go (r+1) (VS.drop (4*imageWidth) d) mimg
+          go (r + 1) (VS.drop (4 * imageWidth) d) mimg
 
     writeRow c r v mimg
       | c >= imageWidth = unsafeFreezeImage mimg
       | otherwise = do
           writePixel mimg c r (v V.! c)
-          writeRow (c+1) r v mimg
+          writeRow (c + 1) r v mimg
 
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
@@ -77,7 +77,7 @@ makeRow = go V.empty
   where
     go !acc !w !d
       | w == 0    = acc
-      | otherwise = go (acc V.++ makePixel (VS.take 4 d)) (w-4) (VS.drop 4 d)
+      | otherwise = go (acc V.++ makePixel (VS.take 4 d)) (w - 4) (VS.drop 4 d)
 
     makePixel d = V.singleton (PixelRGBA8 (d VS.! 0) (d VS.! 1) (d VS.! 2) (d VS.! 3))
 
