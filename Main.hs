@@ -7,7 +7,6 @@ import           Codec.Picture
 import           Codec.Picture.Types
 import           Control.Monad (when)
 import           Control.Monad.ST
-import           Data.Ord
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
@@ -86,17 +85,6 @@ makeRow = go V.empty
 type PixelOrdering = PixelRGBA8 -> PixelRGBA8 -> Ordering
 
 
--- | Composition of user sort choices.
-userSortChoice :: Opts -> PixelOrdering
-userSortChoice Opts {..} = if length userOpts /= 1
-  then error "Only one option can be supplied at a time"
-  else head userOpts
-  where
-    os = [oRed, oGreen, oBlue, oLuminance]
-    fs = [compareRed, compareGreen, compareBlue, compareLuminance]
-    userOpts = [f | (o, f) <- zip os fs, o]
-
-
 -- | Which pixel is more red.
 compareRed :: PixelOrdering
 compareRed (PixelRGBA8 r1 _ _ _) (PixelRGBA8 r2 _ _ _) = compare r1 r2
@@ -112,7 +100,7 @@ compareBlue :: PixelOrdering
 compareBlue (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ b2 _) = compare b1 b2
 
 
--- | Which pixel is more opaque.
+-- | Which pixel is less opaque.
 compareAlpha :: PixelOrdering
 compareAlpha (PixelRGBA8 _ _  _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
 
