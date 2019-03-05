@@ -16,12 +16,13 @@ import           Options.Applicative
 
 main :: IO ()
 main = do
-  opts@Opts {..} <- execParser optsParser
+  Opts {..} <- execParser optsParser
   orig <- either (error "Couldn't read image") convertRGBA8 <$> readImage oImgPath
   when oRed (writePng ("sorted-r-" <> oImgPath) $ makeSortedImage compareRed orig)
   when oGreen (writePng ("sorted-g-" <> oImgPath) $ makeSortedImage compareGreen orig)
   when oBlue (writePng ("sorted-b-" <> oImgPath) $ makeSortedImage compareBlue orig)
   when oAlpha (writePng ("sorted-a-" <> oImgPath) $ makeSortedImage compareAlpha orig)
+  when oAverage (writePng ("sorted-A-" <> oImgPath) $ makeSortedImage compareAverage orig)
   when oLuminance (writePng ("sorted-L-" <> oImgPath) $ makeSortedImage compareLuminance orig)
   when oHue (writePng ("sorted-H-" <> oImgPath) $ makeSortedImage compareHue orig)
   where
@@ -33,6 +34,7 @@ main = do
       <*> switch (short 'g' <> help "Sort by green")
       <*> switch (short 'b' <> help "Sort by blue")
       <*> switch (short 'a' <> help "Sort by alpha")
+      <*> switch (short 'A' <> help "Sort by average of pixel values")
       <*> switch (short 'L' <> help "Sort by luminance")
       <*> switch (short 'H' <> help "Sort by hue")
 
@@ -44,6 +46,7 @@ data Opts = Opts
   , oGreen     :: Bool
   , oBlue      :: Bool
   , oAlpha     :: Bool
+  , oAverage   :: Bool
   , oLuminance :: Bool
   , oHue       :: Bool
   } deriving (Eq, Show)
@@ -103,6 +106,12 @@ compareBlue (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ b2 _) = compare b1 b2
 -- | Which pixel is less opaque.
 compareAlpha :: PixelOrdering
 compareAlpha (PixelRGBA8 _ _  _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
+
+
+-- | Which pixel has a greater average of values.
+compareAverage :: PixelOrdering
+compareAverage (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) =
+  compare (fromIntegral (r1 + g1 + b1 + a1) / 4) (fromIntegral (r2 + g2 + b2 + a2) / 4)
 
 
 -- | Which pixel is brighter.
