@@ -1,4 +1,6 @@
 # pixelsort
+![OSX release](https://github.com/quasi-coherent/pixelsort/releases)
+
 ## usage
 Full list of options:
 
