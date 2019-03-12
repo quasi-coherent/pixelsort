@@ -1,1 +1,2 @@
 resolver: lts-13.5
+local-bin-path: bin/
