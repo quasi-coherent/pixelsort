@@ -14,7 +14,7 @@ Available options:
   -g                       Sort by green
   -b                       Sort by blue
   -a                       Sort by alpha
-  -A                       Sort by average of pixel values
+  --avg                    Sort by average of pixel values
   -L                       Sort by luminance
   -H                       Sort by hue
 ```
