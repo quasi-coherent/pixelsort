@@ -1,5 +1,5 @@
 # pixelsort
-![OSX release](https://github.com/quasi-coherent/pixelsort/releases)
+[OSX release](https://github.com/quasi-coherent/pixelsort/releases)
 
 ## usage
 Full list of options:
@@ -25,7 +25,7 @@ With `pixelsort` somewhere on your path,
 pixelsort --file /path/to/image.jpg -r -g -b
 ```
 
-will sort the rows of pixels of `image.jpg` by red, green, blue, respectively.
+will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, for example.
 
 ## examples
 ![hue](repo_assets/sorted-H.jpg)
