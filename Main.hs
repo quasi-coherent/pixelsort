@@ -26,7 +26,7 @@ main = do
   when oGreen (writePng (baseDir <> "/sorted-g-" <> fileName) $ makeSortedImage compareGreen orig)
   when oBlue (writePng (baseDir <> "/sorted-b-" <> fileName) $ makeSortedImage compareBlue orig)
   when oAlpha (writePng (baseDir <> "/sorted-a-" <> fileName) $ makeSortedImage compareAlpha orig)
-  when oAverage (writePng (baseDir <> "/sorted-A-" <> fileName) $ makeSortedImage compareAverage orig)
+  when oAverage (writePng (baseDir <> "/sorted-avg-" <> fileName) $ makeSortedImage compareAverage orig)
   when oLuminance (writePng (baseDir <> "/sorted-L-" <> fileName) $ makeSortedImage compareLuminance orig)
   when oHue (writePng (baseDir <> "/sorted-H-" <> fileName) $ makeSortedImage compareHue orig)
   where
@@ -38,7 +38,7 @@ main = do
       <*> switch (short 'g' <> help "Sort by green")
       <*> switch (short 'b' <> help "Sort by blue")
       <*> switch (short 'a' <> help "Sort by alpha")
-      <*> switch (short 'A' <> help "Sort by average of pixel values")
+      <*> switch (long "avg" <> help "Sort by average of pixel values")
       <*> switch (short 'L' <> help "Sort by luminance")
       <*> switch (short 'H' <> help "Sort by hue")
 
