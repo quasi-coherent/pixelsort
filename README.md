@@ -5,7 +5,7 @@
 Full list of options:
 
 ``` bash
-Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [-A] [-L] [-H]
+Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [--avg] [-L] [-H]
 
 Available options:
   -h,--help                Show this help text
