@@ -28,7 +28,7 @@ pixelsort --file /path/to/image.jpg -r -g -b
 will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, for example.
 
 ## examples
-![original](repo_assets/orig.jpg]
+![original](repo_assets/orig.jpg)
 
 ![hue](repo_assets/sorted-H.jpg)
 
