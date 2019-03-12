@@ -25,7 +25,7 @@ With `pixelsort` somewhere on your path,
 pixelsort --file /path/to/image.jpg -r -g -b
 ```
 
-will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, for example.
+will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, for example, and save the resulting images in the same location as the original (filename being `sorted-r-image.jpg`, etc.).
 
 ## examples
 ![original](repo_assets/orig.jpg)
