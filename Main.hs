@@ -5,26 +5,30 @@ module Main where
 
 import           Codec.Picture
 import           Codec.Picture.Types
-import           Control.Monad (when)
+import           Control.Lens
+import           Control.Monad
 import           Control.Monad.ST
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
 import           Data.Word (Word8)
 import           Options.Applicative
+import           System.FilePath.Lens
 
 
 main :: IO ()
 main = do
   Opts {..} <- execParser optsParser
   orig <- either (error "Couldn't read image") convertRGBA8 <$> readImage oImgPath
-  when oRed (writePng ("sorted-r-" <> oImgPath) $ makeSortedImage compareRed orig)
-  when oGreen (writePng ("sorted-g-" <> oImgPath) $ makeSortedImage compareGreen orig)
-  when oBlue (writePng ("sorted-b-" <> oImgPath) $ makeSortedImage compareBlue orig)
-  when oAlpha (writePng ("sorted-a-" <> oImgPath) $ makeSortedImage compareAlpha orig)
-  when oAverage (writePng ("sorted-A-" <> oImgPath) $ makeSortedImage compareAverage orig)
-  when oLuminance (writePng ("sorted-L-" <> oImgPath) $ makeSortedImage compareLuminance orig)
-  when oHue (writePng ("sorted-H-" <> oImgPath) $ makeSortedImage compareHue orig)
+  let baseDir  = oImgPath ^. directory
+      fileName = oImgPath ^. filename
+  when oRed (writePng (baseDir <> "/sorted-r-" <> fileName) $ makeSortedImage compareRed orig)
+  when oGreen (writePng (baseDir <> "/sorted-g-" <> fileName) $ makeSortedImage compareGreen orig)
+  when oBlue (writePng (baseDir <> "/sorted-b-" <> fileName) $ makeSortedImage compareBlue orig)
+  when oAlpha (writePng (baseDir <> "/sorted-a-" <> fileName) $ makeSortedImage compareAlpha orig)
+  when oAverage (writePng (baseDir <> "/sorted-A-" <> fileName) $ makeSortedImage compareAverage orig)
+  when oLuminance (writePng (baseDir <> "/sorted-L-" <> fileName) $ makeSortedImage compareLuminance orig)
+  when oHue (writePng (baseDir <> "/sorted-H-" <> fileName) $ makeSortedImage compareHue orig)
   where
     optsParser = info (helper <*> parseOpts) (header "pixelsort")
 

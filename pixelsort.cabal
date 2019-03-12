@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3ba3fe356c3dda50b9edf989ccffd7ed6f302c80cb773348ce678653a7efcbc6
+-- hash: 2601802b3ecf788f6bc092098739b6a3d13a9a16d25a0dacbf137dcb496ba2ab
 
 name:           pixelsort
 version:        0.1.0.0
@@ -35,6 +35,7 @@ executable pixelsort
       JuicyPixels
     , base >=4.7 && <5
     , bytestring
+    , lens
     , optparse-applicative
     , vector
     , vector-algorithms

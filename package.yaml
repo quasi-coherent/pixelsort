@@ -23,6 +23,7 @@ executables:
     - base >= 4.7 && < 5
     - bytestring
     - JuicyPixels
+    - lens
     - optparse-applicative
     - vector
     - vector-algorithms
