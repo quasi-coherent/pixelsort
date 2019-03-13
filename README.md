@@ -5,7 +5,7 @@
 Full list of options:
 
 ``` bash
-Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [--avg] [-L] [-H]
+Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [-M] [-L] [-H]
 
 Available options:
   -h,--help                Show this help text
@@ -14,7 +14,7 @@ Available options:
   -g                       Sort by green
   -b                       Sort by blue
   -a                       Sort by alpha
-  --avg                    Sort by average of pixel values
+  -M                       Sort by average of pixel values
   -L                       Sort by luminance
   -H                       Sort by hue
 ```
@@ -34,7 +34,7 @@ will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, f
 
 ![luminance](repo_assets/sorted-L.jpg)
 
-![average](repo_assets/sorted-avg.jpg)
+![average](repo_assets/sorted-M.jpg)
 
 ![opacity](repo_assets/sorted-a.jpg)
 
