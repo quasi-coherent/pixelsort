@@ -44,7 +44,7 @@ main = do
       <*> switch (short 'M' <> help "Sort by average of pixel values")
       <*> switch (short 'L' <> help "Sort by luminance")
       <*> switch (short 'H' <> help "Sort by hue")
-      <*> switch (short 'R' <> help "Sort randomly")
+      <*> switch (short 'R' <> help "Sort by random comparison of pixel properties")
 
 
 -- | CLI.
