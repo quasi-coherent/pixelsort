@@ -25,5 +25,6 @@ executables:
     - JuicyPixels
     - lens
     - optparse-applicative
+    - random
     - vector
     - vector-algorithms
