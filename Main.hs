@@ -169,4 +169,4 @@ compareRandomly = do
     compare' 3 1 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ g2 _ _) = compare a1 g2
     compare' 3 2 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ b2 _) = compare a1 b2
     compare' 3 3 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
-    compare' _ _ _ _ = error "The impossible has happened"
+    compare' _ _ _ _                                         = error "The impossible has happened"
