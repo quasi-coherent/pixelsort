@@ -31,7 +31,7 @@ main = do
   when oLuminance (writePng (baseDir <> "/sorted-L-" <> fileName) $ makeSortedImage compareLuminance orig)
   when oHue (writePng (baseDir <> "/sorted-H-" <> fileName) $ makeSortedImage compareHue orig)
   when oRandom $ compareRandomly >>= \ord ->
-    writePng (baseDir <> "/sorted-R-" <> fileName) $ makeSortedImage ord orig
+    writePng (baseDir <> "/sorted-rand-" <> fileName) $ makeSortedImage ord orig
   where
     optsParser = info (helper <*> parseOpts) (header "pixelsort")
 
@@ -44,7 +44,7 @@ main = do
       <*> switch (short 'M' <> help "Sort by average of pixel values")
       <*> switch (short 'L' <> help "Sort by luminance")
       <*> switch (short 'H' <> help "Sort by hue")
-      <*> switch (short 'R' <> help "Sort by random comparison of pixel properties")
+      <*> switch (long "rand" <> help "Sort by random comparison of pixel properties")
 
 
 -- | CLI.

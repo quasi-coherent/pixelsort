@@ -5,7 +5,9 @@
 Full list of options:
 
 ``` bash
-Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [-M] [-L] [-H]
+pixelsort
+
+Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [-M] [-L] [-H] [--rand]
 
 Available options:
   -h,--help                Show this help text
@@ -17,6 +19,7 @@ Available options:
   -M                       Sort by average of pixel values
   -L                       Sort by luminance
   -H                       Sort by hue
+  --rand                   Sort by random comparison of pixel properties
 ```
 
 With `pixelsort` somewhere on your path,
@@ -43,3 +46,5 @@ will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, f
 ![green](repo_assets/sorted-g.jpg)
 
 ![blue](repo_assets/sorted-b.jpg)
+
+![random](repo_assets/sorted-rand.jpg)
