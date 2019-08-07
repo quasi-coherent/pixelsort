@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 765ef97d0153dd1d9bf03192ea749f8a88c91f9713f77d5f78e6aa185629fe8a
+-- hash: 55f0954241c9f0a79277268f6f99d01a87d1d6281d15fa56641b9010fa017fc1
 
 name:           pixelsort
 version:        0.1.0.0
@@ -30,7 +30,7 @@ executable pixelsort
       Paths_pixelsort
   hs-source-dirs:
       ./.
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       JuicyPixels
     , base >=4.7 && <5

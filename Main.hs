@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns    #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 module Main where
 
@@ -72,7 +73,7 @@ makeSortedImage f Image {..} = runST $ do
       | otherwise = do
           let row = makeRow (4 * imageWidth) (VS.take (4 * imageWidth) d)
               sortedRow = V.modify (VA.sortBy f) row
-          writeRow 0 r sortedRow mimg
+          void $ writeRow 0 r sortedRow mimg
           go (r + 1) (VS.drop (4 * imageWidth) d) mimg
 
     writeRow c r v mimg
@@ -127,7 +128,7 @@ compareAverage (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) =
 --
 -- https://en.wikipedia.org/wiki/Relative_luminance
 compareLuminance :: PixelOrdering
-compareLuminance a b = compare (relativeLuminance a) (relativeLuminance b)
+compareLuminance x y = compare (relativeLuminance x) (relativeLuminance y)
   where
     relativeLuminance (PixelRGBA8 r g b _)
       = 0.2126 * fromIntegral r + 0.7152 * fromIntegral g + 0.0722 * fromIntegral b
@@ -137,7 +138,7 @@ compareLuminance a b = compare (relativeLuminance a) (relativeLuminance b)
 --
 -- https://en.wikipedia.org/wiki/Hue
 compareHue :: PixelOrdering
-compareHue a b = compare (hue a) (hue b)
+compareHue x y = compare (hue x) (hue y)
   where
     hue (PixelRGBA8 r g b _) =
       atan2 (sqrt 3 * (fromIntegral g - fromIntegral b)) (2 * fromIntegral r - fromIntegral g - fromIntegral b)
@@ -150,21 +151,22 @@ compareRandomly = do
   n2 <- randomRIO (0, 3)
   return $ compare' n1 n2
   where
+    -- Oh, you're so right -- this is disgusting.
     compare' :: Int -> Int -> PixelRGBA8 -> PixelRGBA8 -> Ordering
-    compare' 0 0 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare r1 r2
-    compare' 0 1 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare r1 g2
-    compare' 0 2 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare r1 b2
-    compare' 0 3 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare r1 a2
-    compare' 1 0 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare g1 r2
-    compare' 1 1 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare g1 g2
-    compare' 1 2 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare g1 b2
-    compare' 1 3 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare g1 a2
-    compare' 2 0 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare b1 r2
-    compare' 2 1 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare b1 g2
-    compare' 2 2 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare b1 b2
-    compare' 2 3 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare b1 a2
-    compare' 3 0 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare a1 r2
-    compare' 3 1 (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare a1 g2
-    compare' 3 2 (PixelRGBA8 r1 gf b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare a1 b2
-    compare' 3 3 (PixelRGBA8 r1 gf b1 a1) (PixelRGBA8 r2 g2 b2 a2) = compare a1 a2
+    compare' 0 0 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 r2 _ _ _) = compare r1 r2
+    compare' 0 1 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ g2 _ _) = compare r1 g2
+    compare' 0 2 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ _ b2 _) = compare r1 b2
+    compare' 0 3 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ _ _ a2) = compare r1 a2
+    compare' 1 0 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 r2 _ _ _) = compare g1 r2
+    compare' 1 1 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ g2 _ _) = compare g1 g2
+    compare' 1 2 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ _ b2 _) = compare g1 b2
+    compare' 1 3 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ _ _ a2) = compare g1 a2
+    compare' 2 0 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 r2 _ _ _) = compare b1 r2
+    compare' 2 1 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ g2 _ _) = compare b1 g2
+    compare' 2 2 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ b2 _) = compare b1 b2
+    compare' 2 3 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ _ a2) = compare b1 a2
+    compare' 3 0 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 r2 _ _ _) = compare a1 r2
+    compare' 3 1 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ g2 _ _) = compare a1 g2
+    compare' 3 2 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ b2 _) = compare a1 b2
+    compare' 3 3 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
     compare' _ _ _ _ = error "The impossible has happened"
