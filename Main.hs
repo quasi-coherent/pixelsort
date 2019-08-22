@@ -150,8 +150,7 @@ compareRandomly = do
   n1 <- randomRIO (0, 3)
   n2 <- randomRIO (0, 3)
   return $ compare' n1 n2
-  where
-    -- Oh, you're so right -- this is disgusting.
+    where
     compare' :: Int -> Int -> PixelRGBA8 -> PixelRGBA8 -> Ordering
     compare' 0 0 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 r2 _ _ _) = compare r1 r2
     compare' 0 1 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ g2 _ _) = compare r1 g2
