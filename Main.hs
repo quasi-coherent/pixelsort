@@ -9,6 +9,7 @@ import           Codec.Picture.Types
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.ST
+import           Data.Maybe
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
@@ -22,18 +23,28 @@ main :: IO ()
 main = do
   Opts {..} <- execParser optsParser
   orig <- either (error "Couldn't read image") convertRGBA8 <$> readImage oImgPath
+  when (invalidMask oImgMask orig)
+    (error $ "Image dimension is " <> show (imageHeight orig) <> " by " <> show (imageWidth orig) <> ". "
+          <> "Row/column min/max must be constrained by these bounds, and min must be less than, or equal to, max.")
   let baseDir  = oImgPath ^. directory
       fileName = oImgPath ^. filename
-  when oRed (writePng (baseDir <> "/sorted-r-" <> fileName) $ makeSortedImage compareRed orig)
-  when oGreen (writePng (baseDir <> "/sorted-g-" <> fileName) $ makeSortedImage compareGreen orig)
-  when oBlue (writePng (baseDir <> "/sorted-b-" <> fileName) $ makeSortedImage compareBlue orig)
-  when oAlpha (writePng (baseDir <> "/sorted-a-" <> fileName) $ makeSortedImage compareAlpha orig)
-  when oAverage (writePng (baseDir <> "/sorted-M-" <> fileName) $ makeSortedImage compareAverage orig)
-  when oLuminance (writePng (baseDir <> "/sorted-L-" <> fileName) $ makeSortedImage compareLuminance orig)
-  when oHue (writePng (baseDir <> "/sorted-H-" <> fileName) $ makeSortedImage compareHue orig)
+  when oRed (writePng (baseDir <> "/sorted-r-" <> fileName) $ makeSortedImage compareRed oImgMask orig)
+  when oGreen (writePng (baseDir <> "/sorted-g-" <> fileName) $ makeSortedImage compareGreen oImgMask orig)
+  when oBlue (writePng (baseDir <> "/sorted-b-" <> fileName) $ makeSortedImage compareBlue oImgMask orig)
+  when oAlpha (writePng (baseDir <> "/sorted-a-" <> fileName) $ makeSortedImage compareAlpha oImgMask orig)
+  when oAverage (writePng (baseDir <> "/sorted-M-" <> fileName) $ makeSortedImage compareAverage oImgMask orig)
+  when oLuminance (writePng (baseDir <> "/sorted-L-" <> fileName) $ makeSortedImage compareLuminance oImgMask orig)
+  when oHue (writePng (baseDir <> "/sorted-H-" <> fileName) $ makeSortedImage compareHue oImgMask orig)
   when oRandom $ compareRandomly >>= \ord ->
-    writePng (baseDir <> "/sorted-rand-" <> fileName) $ makeSortedImage ord orig
+    writePng (baseDir <> "/sorted-rand-" <> fileName) $ makeSortedImage ord oImgMask orig
   where
+    invalidMask ImgMask {..} orig =
+      let rMin = fromMaybe 0 imRowMin
+          rMax = fromMaybe (imageHeight orig) imRowMax
+          cMin = fromMaybe 0 imColMin
+          cMax = fromMaybe (imageWidth orig) imColMax
+      in rMin < 0 || rMax > imageHeight orig || cMin < 0 || cMax > imageWidth orig || (cMin > cMax || rMin > rMax)
+
     optsParser = info (helper <*> parseOpts) (header "pixelsort")
 
     parseOpts = Opts
@@ -46,6 +57,22 @@ main = do
       <*> switch (short 'L' <> help "Sort by luminance")
       <*> switch (short 'H' <> help "Sort by hue")
       <*> switch (long "rand" <> help "Sort by random comparison of pixel properties")
+      <*> parseImgMask
+
+    parseImgMask = ImgMask
+      <$> optional (option auto $ long "row-min" <> help "Row to start pixel sorting")
+      <*> optional (option auto $ long "row-max" <> help "Row to end pixel sorting")
+      <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting")
+      <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting")
+
+
+-- | The subset of the image to sort.
+data ImgMask = ImgMask
+  { imRowMin :: Maybe Int
+  , imRowMax :: Maybe Int
+  , imColMin :: Maybe Int
+  , imColMax :: Maybe Int
+  } deriving (Eq, Show)
 
 
 -- | CLI.
@@ -59,32 +86,44 @@ data Opts = Opts
   , oLuminance :: Bool
   , oHue       :: Bool
   , oRandom    :: Bool
+  , oImgMask   :: ImgMask
   } deriving (Eq, Show)
 
 
 -- | Sort the image with the given ordering.
-makeSortedImage :: PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8
-makeSortedImage f Image {..} = runST $ do
-  mimg <- newMutableImage imageWidth imageHeight
-  go 0 imageData mimg
+makeSortedImage
+  :: PixelOrdering -- ^ Sorting function.
+  -> ImgMask -- ^ Subset of the image to sort.
+  -> Image PixelRGBA8 -- ^ Image to sort.
+  -> Image PixelRGBA8
+makeSortedImage f ImgMask {..} img@Image {..} = runST $ do
+  mimg <- unsafeThawImage img
+  let rMin = fromMaybe 0 imRowMin
+      rMax = fromMaybe imageHeight imRowMax
+      cMin = fromMaybe 0 imColMin
+      cMax = fromMaybe imageWidth imColMax
+  go rMin rMax cMin cMax imageData mimg
   where
-    go r d mimg
-      | r >= imageHeight = unsafeFreezeImage mimg
+    go r r' c c' d mimg
+      | r >= r' = unsafeFreezeImage mimg
       | otherwise = do
-          let row = makeRow (4 * imageWidth) (VS.take (4 * imageWidth) d)
+          let row = makeRow (4 * c') (VS.take (4 * c') d)
               sortedRow = V.modify (VA.sortBy f) row
-          void $ writeRow 0 r sortedRow mimg
-          go (r + 1) (VS.drop (4 * imageWidth) d) mimg
+          void $ writeRow c c' r sortedRow mimg
+          go (r + 1) r' c c' (VS.drop (4 * c') d) mimg
 
-    writeRow c r v mimg
-      | c >= imageWidth = unsafeFreezeImage mimg
+    writeRow c c' r v mimg
+      | c >= c' = unsafeFreezeImage mimg
       | otherwise = do
           writePixel mimg c r (v V.! c)
-          writeRow (c + 1) r v mimg
+          writeRow (c + 1) c' r v mimg
 
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
-makeRow :: Int -> VS.Vector Word8 -> V.Vector PixelRGBA8
+makeRow
+  :: Int
+  -> VS.Vector Word8
+  -> V.Vector PixelRGBA8
 makeRow = go V.empty
   where
     go !acc !w !d
@@ -151,21 +190,21 @@ compareRandomly = do
   n2 <- randomRIO (0, 3)
   return $ compare' n1 n2
     where
-    compare' :: Int -> Int -> PixelRGBA8 -> PixelRGBA8 -> Ordering
-    compare' 0 0 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 r2 _ _ _) = compare r1 r2
-    compare' 0 1 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ g2 _ _) = compare r1 g2
-    compare' 0 2 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ _ b2 _) = compare r1 b2
-    compare' 0 3 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ _ _ a2) = compare r1 a2
-    compare' 1 0 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 r2 _ _ _) = compare g1 r2
-    compare' 1 1 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ g2 _ _) = compare g1 g2
-    compare' 1 2 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ _ b2 _) = compare g1 b2
-    compare' 1 3 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ _ _ a2) = compare g1 a2
-    compare' 2 0 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 r2 _ _ _) = compare b1 r2
-    compare' 2 1 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ g2 _ _) = compare b1 g2
-    compare' 2 2 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ b2 _) = compare b1 b2
-    compare' 2 3 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ _ a2) = compare b1 a2
-    compare' 3 0 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 r2 _ _ _) = compare a1 r2
-    compare' 3 1 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ g2 _ _) = compare a1 g2
-    compare' 3 2 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ b2 _) = compare a1 b2
-    compare' 3 3 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
-    compare' _ _ _ _                                         = error "The impossible has happened"
+      compare' :: Int -> Int -> PixelRGBA8 -> PixelRGBA8 -> Ordering
+      compare' 0 0 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 r2 _ _ _) = compare r1 r2
+      compare' 0 1 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ g2 _ _) = compare r1 g2
+      compare' 0 2 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ _ b2 _) = compare r1 b2
+      compare' 0 3 (PixelRGBA8 r1 _ _ _) (PixelRGBA8 _ _ _ a2) = compare r1 a2
+      compare' 1 0 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 r2 _ _ _) = compare g1 r2
+      compare' 1 1 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ g2 _ _) = compare g1 g2
+      compare' 1 2 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ _ b2 _) = compare g1 b2
+      compare' 1 3 (PixelRGBA8 _ g1 _ _) (PixelRGBA8 _ _ _ a2) = compare g1 a2
+      compare' 2 0 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 r2 _ _ _) = compare b1 r2
+      compare' 2 1 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ g2 _ _) = compare b1 g2
+      compare' 2 2 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ b2 _) = compare b1 b2
+      compare' 2 3 (PixelRGBA8 _ _ b1 _) (PixelRGBA8 _ _ _ a2) = compare b1 a2
+      compare' 3 0 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 r2 _ _ _) = compare a1 r2
+      compare' 3 1 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ g2 _ _) = compare a1 g2
+      compare' 3 2 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ b2 _) = compare a1 b2
+      compare' 3 3 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
+      compare' _ _ _ _                                         = error "The impossible has happened"
