@@ -8,6 +8,7 @@ Full list of options:
 pixelsort
 
 Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [-M] [-L] [-H] [--rand]
+                 [--row-min ARG] [--row-max ARG] [--col-min ARG] [--col-max ARG]
 
 Available options:
   -h,--help                Show this help text
@@ -20,6 +21,10 @@ Available options:
   -L                       Sort by luminance
   -H                       Sort by hue
   --rand                   Sort by random comparison of pixel properties
+  --row-min ARG            Row to start pixel sorting
+  --row-max ARG            Row to end pixel sorting
+  --col-min ARG            Column to start pixel sorting
+  --col-max ARG            Column to end pixel sorting
 ```
 
 With `pixelsort` somewhere on your path,
