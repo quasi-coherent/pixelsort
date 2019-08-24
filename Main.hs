@@ -9,6 +9,7 @@ import           Codec.Picture.Types
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.ST
+import           Data.List.Split
 import           Data.Maybe
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VA
@@ -26,17 +27,15 @@ main = do
   when (invalidMask oImgMask orig)
     (error $ "Image dimension is " <> show (imageHeight orig) <> " by " <> show (imageWidth orig) <> ". "
           <> "Row/column min/max must be constrained by these bounds, and min must be less than, or equal to, max.")
-  let baseDir  = oImgPath ^. directory
-      fileName = oImgPath ^. filename
-  when oRed (writePng (baseDir <> "/sorted-r-" <> fileName) $ makeSortedImage compareRed oImgMask orig)
-  when oGreen (writePng (baseDir <> "/sorted-g-" <> fileName) $ makeSortedImage compareGreen oImgMask orig)
-  when oBlue (writePng (baseDir <> "/sorted-b-" <> fileName) $ makeSortedImage compareBlue oImgMask orig)
-  when oAlpha (writePng (baseDir <> "/sorted-a-" <> fileName) $ makeSortedImage compareAlpha oImgMask orig)
-  when oAverage (writePng (baseDir <> "/sorted-M-" <> fileName) $ makeSortedImage compareAverage oImgMask orig)
-  when oLuminance (writePng (baseDir <> "/sorted-L-" <> fileName) $ makeSortedImage compareLuminance oImgMask orig)
-  when oHue (writePng (baseDir <> "/sorted-H-" <> fileName) $ makeSortedImage compareHue oImgMask orig)
+  when oRed (writePng (makeFileName oImgPath "-sorted-r") $ makeSortedImage compareRed oImgMask orig)
+  when oGreen (writePng (makeFileName oImgPath "-sorted-g") $ makeSortedImage compareGreen oImgMask orig)
+  when oBlue (writePng (makeFileName oImgPath "-sorted-b") $ makeSortedImage compareBlue oImgMask orig)
+  when oAlpha (writePng (makeFileName oImgPath "-sorted-a") $ makeSortedImage compareAlpha oImgMask orig)
+  when oAverage (writePng (makeFileName oImgPath "-sorted-M") $ makeSortedImage compareAverage oImgMask orig)
+  when oLuminance (writePng (makeFileName oImgPath "-sorted-L") $ makeSortedImage compareLuminance oImgMask orig)
+  when oHue (writePng (makeFileName oImgPath "-sorted-H") $ makeSortedImage compareHue oImgMask orig)
   when oRandom $ compareRandomly >>= \ord ->
-    writePng (baseDir <> "/sorted-rand-" <> fileName) $ makeSortedImage ord oImgMask orig
+    writePng (makeFileName oImgPath "-sorted-rand") $ makeSortedImage ord oImgMask orig
   where
     invalidMask ImgMask {..} orig =
       let rMin = fromMaybe 0 imRowMin
@@ -44,6 +43,13 @@ main = do
           cMin = fromMaybe 0 imColMin
           cMax = fromMaybe (imageWidth orig) imColMax
       in rMin < 0 || rMax > imageHeight orig || cMin < 0 || cMax > imageWidth orig || (cMin > cMax || rMin > rMax)
+
+    makeFileName imgPath suffix =
+      let baseDir     = imgPath ^. directory
+          [name, ext] = case splitOn "." $ imgPath ^. filename of
+            (n:x:_) -> [n, x]
+            _       -> error "Invalid filename/extension."
+      in baseDir <> "/" <> name <> suffix <> "." <> ext
 
     optsParser = info (helper <*> parseOpts) (header "pixelsort")
 

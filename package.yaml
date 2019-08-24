@@ -26,5 +26,6 @@ executables:
     - lens
     - optparse-applicative
     - random
+    - split
     - vector
     - vector-algorithms

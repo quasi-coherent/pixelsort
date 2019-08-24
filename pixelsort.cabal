@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 03143952ad7f82d040ec4efbad5aaad5ab587d96f38cf1e0a5317e201ce4683b
+-- hash: 2627c2fcedfb74a33147068b83f1a99ad859e600a302d882cf6c84f18510e3ef
 
 name:           pixelsort
 version:        0.1.0.0
@@ -37,6 +37,7 @@ executable pixelsort
     , lens
     , optparse-applicative
     , random
+    , split
     , vector
     , vector-algorithms
   default-language: Haskell2010
