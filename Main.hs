@@ -34,6 +34,7 @@ main = do
   when oAverage (writePng (makeFileName oImgPath "-sorted-M") $ makeSortedImage compareAverage oImgMask orig)
   when oLuminance (writePng (makeFileName oImgPath "-sorted-L") $ makeSortedImage compareLuminance oImgMask orig)
   when oHue (writePng (makeFileName oImgPath "-sorted-H") $ makeSortedImage compareHue oImgMask orig)
+  when oNorm (writePng (makeFileName oImgPath "-sorted-N") $ makeSortedImage compareNorm oImgMask orig)
   when oRandom $ compareRandomly >>= \ord ->
     writePng (makeFileName oImgPath "-sorted-rand") $ makeSortedImage ord oImgMask orig
   where
@@ -62,6 +63,7 @@ main = do
       <*> switch (short 'M' <> help "Sort by average of pixel values")
       <*> switch (short 'L' <> help "Sort by luminance")
       <*> switch (short 'H' <> help "Sort by hue")
+      <*> switch (short 'N' <> help "Sort by norm of the pixels considered as points in 4-dimensional space")
       <*> switch (long "rand" <> help "Sort by random comparison of pixel properties")
       <*> parseImgMask
 
@@ -91,6 +93,7 @@ data Opts = Opts
   , oAverage   :: Bool
   , oLuminance :: Bool
   , oHue       :: Bool
+  , oNorm      :: Bool
   , oRandom    :: Bool
   , oImgMask   :: ImgMask
   } deriving (Eq, Show)
@@ -187,6 +190,14 @@ compareHue x y = compare (hue x) (hue y)
   where
     hue (PixelRGBA8 r g b _) =
       atan2 (sqrt 3 * (fromIntegral g - fromIntegral b)) (2 * fromIntegral r - fromIntegral g - fromIntegral b)
+
+
+-- | Compare by norm of the pixel considered as a point in 4-dimensional space.
+compareNorm :: PixelOrdering
+compareNorm x y = compare (norm x) (norm y)
+  where
+    norm (PixelRGBA8 r g b a) =
+      sqrt $ fromIntegral r ^ 2 + fromIntegral g ^ 2 + fromIntegral b ^ 2 + fromIntegral a ^ 2
 
 
 -- | Random comparison.
