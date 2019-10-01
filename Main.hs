@@ -115,21 +115,21 @@ makeSortedImage f ImgMask {..} img@Image {..} = runST $ do
       rMax = fromMaybe imageHeight imRowMax
       cMin = fromMaybe 0 imColMin
       cMax = fromMaybe imageWidth imColMax
-  go rMin rMax cMin cMax imageData mimg
+  go rMin rMax cMin cMax imageWidth imageData mimg
   where
-    go r r' c c' d mimg
+    go r r' c c' iw d mimg
       | r >= r' = unsafeFreezeImage mimg
       | otherwise = do
           let row = makeRow (4 * c') (VS.take (4 * c') d)
-              sortedRow = V.modify (VA.sortBy f) row
-          void $ writeRow c c' r sortedRow mimg
-          go (r + 1) r' c c' (VS.drop (4 * c') d) mimg
+              sortedRow = V.modify (VA.sortBy f) $ V.drop c row
+          void $ writeRow c c' c r sortedRow mimg
+          go (r + 1) r' c c' iw (VS.drop (4 * iw) d) mimg
 
-    writeRow c c' r v mimg
+    writeRow c c' ic r v mimg
       | c >= c' = unsafeFreezeImage mimg
       | otherwise = do
-          writePixel mimg c r (v V.! c)
-          writeRow (c + 1) c' r v mimg
+          writePixel mimg c r (v V.! (c - ic))
+          writeRow (c + 1) c' ic r v mimg
 
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
