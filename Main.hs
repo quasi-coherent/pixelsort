@@ -175,21 +175,27 @@ compareAverage :: PixelOrdering
 compareAverage (PixelRGBA8 r1 g1 b1 a1) (PixelRGBA8 r2 g2 b2 a2) =
   compare (fromIntegral (r1 + g1 + b1 + a1) / 4) (fromIntegral (r2 + g2 + b2 + a2) / 4)
 
--- | Calculates luminance
-relativeLuminance :: Fractional a => PixelRGBA8 -> a
-relativeLuminance (PixelRGBA8 r g b _) = 0.2126 * fromIntegral r + 0.7152 * fromIntegral g + 0.0722 * fromIntegral b
 
--- | Calculates hue
+-- | Calculate luminance.
+relativeLuminance :: Fractional a => PixelRGBA8 -> a
+relativeLuminance (PixelRGBA8 r g b _) =
+  0.2126 * fromIntegral r + 0.7152 * fromIntegral g + 0.0722 * fromIntegral b
+
+
+-- | Calculate hue.
 hue :: RealFloat a => PixelRGBA8 -> a
 hue (PixelRGBA8 r g b _)
-        | degrees < 0 = (degrees + 360) / 360
-        | otherwise   = degrees / 360
-      where degrees = 60 * atan2 (sqrt 3 * (fromIntegral g - fromIntegral b )) (2 * fromIntegral r - fromIntegral g - fromIntegral b)
+  | degrees < 0 = (degrees + 360) / 360
+  | otherwise   = degrees / 360
+  where
+    degrees =
+      60 * atan2 (sqrt 3 * (fromIntegral g - fromIntegral b)) (2 * fromIntegral r - fromIntegral g - fromIntegral b)
 
--- | Calculate value
-colorValue :: (Fractional a, Ord a) => PixelRGBA8 -> a
-colorValue (PixelRGBA8 r g b _) =
-      maximum [fromIntegral r, fromIntegral g, fromIntegral b]
+
+-- | Calculate the maximum pixel value.
+maxPixelValue :: (Fractional a, Ord a) => PixelRGBA8 -> a
+maxPixelValue (PixelRGBA8 r g b _) = maximum [fromIntegral r, fromIntegral g, fromIntegral b]
+
 
 -- | Which pixel is brighter.
 --
@@ -213,7 +219,7 @@ compareNorm x y = compare (norm x) (norm y)
       sqrt $ fromIntegral r ^ 2 + fromIntegral g ^ 2 + fromIntegral b ^ 2 + fromIntegral a ^ 2
 
 
--- | Compare by step function (with 8 steps) with hue, luminance and value
+-- | Compare by a step function (with 8 steps) of hue, luminance, and maximum value.
 compareStep :: PixelOrdering
 compareStep x y = compare (step x) (step y)
   where
@@ -223,7 +229,7 @@ compareStep x y = compare (step x) (step y)
         where
           newHue = round (hue (PixelRGBA8 r g b a) * 8)
           newLuminance = round (relativeLuminance (PixelRGBA8 r g b a) )
-          newColorValue = round ( colorValue (PixelRGBA8 r g b a) / 255 * 8)
+          newColorValue = round (maxPixelValue (PixelRGBA8 r g b a) / 255 * 8)
 
 
 -- | Random comparison.
