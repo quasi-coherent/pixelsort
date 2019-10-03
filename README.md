@@ -21,7 +21,7 @@ Available options:
   -L                       Sort by luminance
   -H                       Sort by hue
   -N                       Sort by norm of the pixel considered as a point in 4D space
-  -S                       Sort by step fcn (8 steps) of hue, luminance and value
+  -S                       Sort by a step function (with 8 steps) of hue, luminance, and maximum pixel value
   --rand                   Sort by random comparison of pixel properties
   --row-min ARG            Row to start pixel sorting
   --row-max ARG            Row to end pixel sorting

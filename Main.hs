@@ -65,7 +65,7 @@ main = do
       <*> switch (short 'L' <> help "Sort by luminance")
       <*> switch (short 'H' <> help "Sort by hue")
       <*> switch (short 'N' <> help "Sort by norm of the pixels considered as points in 4-dimensional space")
-      <*> switch (short 'S' <> help "Sort by step function of the pixels considered as points in 4-dimensional space")
+      <*> switch (short 'S' <> help "Sort by a step function (with 8 steps) of hue, luminance, and maximum pixel value")
       <*> switch (long "rand" <> help "Sort by random comparison of pixel properties")
       <*> parseImgMask
 
