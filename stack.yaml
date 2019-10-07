@@ -1,2 +1,6 @@
 resolver: lts-13.5
 local-bin-path: bin/
+extra-deps:
+- 'containers-0.6.1.1'
+- 'binary-0.8.7.0@sha256:ae3e6cca723ac55c54bbb3fa771bcf18142bc727afd57818e66d6ee6c8044f12,7705'
+- 'sequence-0.9.8@sha256:8516088c0b98ea810786e680db22d5d0b70c51ba60631a3d1fe83c45e8ebe8bf,911'

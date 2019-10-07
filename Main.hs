@@ -9,8 +9,10 @@ import           Codec.Picture.Types
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.ST
+import           Data.Foldable (toList)
 import           Data.List.Split
 import           Data.Maybe
+import qualified Data.Sequence as Seq
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
@@ -36,6 +38,7 @@ main = do
   when oHue (writePng (makeFileName oImgPath "-sorted-H") $ makeSortedImage compareHue oImgMask orig)
   when oNorm (writePng (makeFileName oImgPath "-sorted-N") $ makeSortedImage compareNorm oImgMask orig)
   when oStep (writePng (makeFileName oImgPath "-sorted-S") $ makeSortedImage compareStep oImgMask orig)
+  when oPortion (writePng (makeFileName oImgPath "-sorted-P") $ makeUnbrokenSortedImage compareHue orig)
   when oRandom $ compareRandomly >>= \ord ->
     writePng (makeFileName oImgPath "-sorted-rand") $ makeSortedImage ord oImgMask orig
   where
@@ -66,6 +69,7 @@ main = do
       <*> switch (short 'H' <> help "Sort by hue")
       <*> switch (short 'N' <> help "Sort by norm of the pixels considered as points in 4-dimensional space")
       <*> switch (short 'S' <> help "Sort by step function of the pixels considered as points in 4-dimensional space")
+      <*> switch (short 'P' <> help "Sort unbroken picture")
       <*> switch (long "rand" <> help "Sort by random comparison of pixel properties")
       <*> parseImgMask
 
@@ -98,6 +102,7 @@ data Opts = Opts
   , oHue       :: Bool
   , oNorm      :: Bool
   , oStep      :: Bool
+  , oPortion   :: Bool
   , oRandom    :: Bool
   , oImgMask   :: ImgMask
   } deriving (Eq, Show)
@@ -131,19 +136,42 @@ makeSortedImage f ImgMask {..} img@Image {..} = runST $ do
           writePixel mimg c r (v V.! (c - ic))
           writeRow (c + 1) c' ic r v mimg
 
+-- | Sort the image without breaking it into rows of pixels.
+makeUnbrokenSortedImage
+  :: PixelOrdering
+  -> Image PixelRGBA8
+  -> Image PixelRGBA8
+makeUnbrokenSortedImage f img@Image {..} = runST $ do
+  mimg <- unsafeThawImage img
+  let rawImage = makeRow (VS.length imageData) imageData
+      sortedImage = V.modify (VA.sortBy f) rawImage
+  go 0 sortedImage mimg
+  where
+    go r d mimg
+      | r >= imageHeight = unsafeFreezeImage mimg
+      | otherwise = do
+          void $ writeRow r 0 (V.take imageWidth d) mimg
+          go (r + 1) (V.drop imageWidth d) mimg
+
+    writeRow r c v mimg
+      | c >= imageWidth = unsafeFreezeImage mimg
+      | otherwise = do
+          writePixel mimg c r (v V.! c)
+          writeRow r (c + 1) v mimg
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
 makeRow
   :: Int
   -> VS.Vector Word8
   -> V.Vector PixelRGBA8
-makeRow = go V.empty
+makeRow = go Seq.empty
   where
     go !acc !w !d
-      | w == 0    = acc
-      | otherwise = go (acc V.++ makePixel (VS.take 4 d)) (w - 4) (VS.drop 4 d)
+      | w == 0    = V.fromList $ toList acc
+      | otherwise =
+        go (acc Seq.|> makePixel (VS.take 4 d)) (w - 4) (VS.drop 4 d)
 
-    makePixel d = V.singleton (PixelRGBA8 (d VS.! 0) (d VS.! 1) (d VS.! 2) (d VS.! 3))
+    makePixel d = PixelRGBA8 (d VS.! 0) (d VS.! 1) (d VS.! 2) (d VS.! 3)
 
 
 -- | How to arrange pixels.

@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
+-- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2627c2fcedfb74a33147068b83f1a99ad859e600a302d882cf6c84f18510e3ef
+-- hash: 5c3c02b26d12f4d4876d82bcd91a70f6d709dc84786cf803fb2f4385bf149dd5
 
 name:           pixelsort
 version:        0.1.0.0
@@ -34,9 +34,11 @@ executable pixelsort
   build-depends:
       JuicyPixels
     , base >=4.7 && <5
+    , containers
     , lens
     , optparse-applicative
     , random
+    , sequence >=0.9.8
     , split
     , vector
     , vector-algorithms
