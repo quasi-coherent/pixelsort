@@ -33,7 +33,7 @@ main = do
   let sortOptions = filter (/= Inactive)
         [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
   writeSortedImages cliPath cliMask orig
-    (if cliUnbroken then makeUnbrokenSortedImage else makeSortedImage)
+    (if cliUnbroken then makeUnbrokenSortedImage else makeSortedImage cliMask)
     sortOptions
   where
     invalidMask ImgMask {..} orig =
@@ -107,7 +107,7 @@ writeSortedImages
   :: FilePath -- ^ Path to the original image.
   -> ImgMask -- ^ Subset of the image to short.
   -> Image PixelRGBA8 -- ^ Original image.
-  -> (PixelOrdering -> ImgMask -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
+  -> (PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
   -> [SortOption] -- ^ Collection of sort options.
   -> IO ()
 writeSortedImages path mask orig sort = mapM_ (writeSortedImage path mask orig sort)
@@ -118,31 +118,31 @@ writeSortedImage
   :: FilePath -- ^ Path the original image.
   -> ImgMask -- ^ Subset of the image to short.
   -> Image PixelRGBA8 -- ^ Original image.
-  -> (PixelOrdering -> ImgMask -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
+  -> (PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
   -> SortOption -- ^ How to sort.
   -> IO ()
 writeSortedImage path mask orig sort = \case
-  Red       -> writePng (makeFileName path "-sorted-r") $ sort compareRed mask orig
-  Green     -> writePng (makeFileName path "-sorted-g") $ sort compareGreen mask orig
-  Blue      -> writePng (makeFileName path "-sorted-b") $ sort compareBlue mask orig
-  Alpha     -> writePng (makeFileName path "-sorted-a") $ sort compareAlpha mask orig
-  Average   -> writePng (makeFileName path "-sorted-M") $ sort compareAverage mask orig
-  Luminance -> writePng (makeFileName path "-sorted-L") $ sort compareLuminance mask orig
-  Hue       -> writePng (makeFileName path "-sorted-H") $ sort compareHue mask orig
-  Norm      -> writePng (makeFileName path "-sorted-N") $ sort compareNorm mask orig
-  Step      -> writePng (makeFileName path "-sorted-S") $ sort compareStep mask orig
+  Red       -> writePng (makeFileName path "-sorted-r") $ sort compareRed orig
+  Green     -> writePng (makeFileName path "-sorted-g") $ sort compareGreen orig
+  Blue      -> writePng (makeFileName path "-sorted-b") $ sort compareBlue orig
+  Alpha     -> writePng (makeFileName path "-sorted-a") $ sort compareAlpha orig
+  Average   -> writePng (makeFileName path "-sorted-M") $ sort compareAverage orig
+  Luminance -> writePng (makeFileName path "-sorted-L") $ sort compareLuminance orig
+  Hue       -> writePng (makeFileName path "-sorted-H") $ sort compareHue orig
+  Norm      -> writePng (makeFileName path "-sorted-N") $ sort compareNorm orig
+  Step      -> writePng (makeFileName path "-sorted-S") $ sort compareStep orig
   Random    -> compareRandomly >>= \ord ->
-    writePng (makeFileName path "-sorted-rand") $ makeSortedImage ord mask orig
+    writePng (makeFileName path "-sorted-rand") $ sort ord orig
   Inactive  -> error "Attempted to write a sorted image with no sort option provided."
 
 
 -- | Sort the image with the given ordering.
 makeSortedImage
-  :: PixelOrdering -- ^ Sorting function.
-  -> ImgMask -- ^ Subset of the image to sort.
+  :: ImgMask -- ^ Subset of the image to sort.
+  -> PixelOrdering -- ^ Sorting function.
   -> Image PixelRGBA8 -- ^ Image to sort.
   -> Image PixelRGBA8
-makeSortedImage f ImgMask {..} img@Image {..} = runST $ do
+makeSortedImage ImgMask {..} f img@Image {..} = runST $ do
   mimg <- unsafeThawImage img
   let rMin = fromMaybe 0 imRowMin
       rMax = fromMaybe imageHeight imRowMax
@@ -168,10 +168,9 @@ makeSortedImage f ImgMask {..} img@Image {..} = runST $ do
 -- | Sort the image without breaking it into rows of pixels.
 makeUnbrokenSortedImage
   :: PixelOrdering -- ^ Sorting function.
-  -> ImgMask -- ^ Subset of the image to sort, ignored by this function.
   -> Image PixelRGBA8 -- ^ Image to sort.
   -> Image PixelRGBA8
-makeUnbrokenSortedImage f _ img@Image {..} = runST $ do
+makeUnbrokenSortedImage f img@Image {..} = runST $ do
   mimg <- unsafeThawImage img
   let rawImage = makeRow (VS.length imageData) imageData
       sortedImage = V.modify (VA.sortBy f) rawImage
