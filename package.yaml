@@ -29,3 +29,5 @@ executables:
     - split
     - vector
     - vector-algorithms
+    - containers
+    - sequence >= 0.9.8
