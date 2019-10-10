@@ -62,4 +62,4 @@ will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, f
 
 `pixelsort -H  --unbroken --file repo_assets/orig.jpg`
 
-[unbroken](repo_assets/orig-sorted-H.jpg)
+![unbroken](repo_assets/orig-sorted-H.jpg)
