@@ -105,23 +105,21 @@ data CLI = CLI
 -- | Write all images according to command line sort options.
 writeSortedImages
   :: FilePath -- ^ Path to the original image.
-  -> ImgMask -- ^ Subset of the image to short.
   -> Image PixelRGBA8 -- ^ Original image.
   -> (PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
   -> [SortOption] -- ^ Collection of sort options.
   -> IO ()
-writeSortedImages path mask orig sort = mapM_ (writeSortedImage path mask orig sort)
+writeSortedImages path orig sort = mapM_ (writeSortedImage path orig sort)
 
 
 -- | Sort, given an option, and write the sorted image to the filesystem.
 writeSortedImage
   :: FilePath -- ^ Path the original image.
-  -> ImgMask -- ^ Subset of the image to short.
   -> Image PixelRGBA8 -- ^ Original image.
   -> (PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
   -> SortOption -- ^ How to sort.
   -> IO ()
-writeSortedImage path mask orig sort = \case
+writeSortedImage path orig sort = \case
   Red       -> writePng (makeFileName path "-sorted-r") $ sort compareRed orig
   Green     -> writePng (makeFileName path "-sorted-g") $ sort compareGreen orig
   Blue      -> writePng (makeFileName path "-sorted-b") $ sort compareBlue orig
