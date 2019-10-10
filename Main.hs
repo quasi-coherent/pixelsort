@@ -132,6 +132,13 @@ writeSortedImage path orig sort = \case
   Random    -> compareRandomly >>= \ord ->
     writePng (makeFileName path "-sorted-rand") $ sort ord orig
   Inactive  -> error "Attempted to write a sorted image with no sort option provided."
+  where
+    makeFileName imgPath suffix =
+      let baseDir     = imgPath ^. directory
+          [name, ext] = case splitOn "." $ imgPath ^. filename of
+            (n:x:_) -> [n, x]
+            _       -> error "Invalid filename/extension."
+      in baseDir <> "/" <> name <> suffix <> "." <> ext
 
 
 -- | Sort the image with the given ordering.
@@ -313,12 +320,3 @@ compareRandomly = do
       compare' 3 2 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ b2 _) = compare a1 b2
       compare' 3 3 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
       compare' _ _ _ _                                         = error "The impossible has happened"
-
-
-makeFileName :: FilePath -> String -> FilePath
-makeFileName imgPath suffix =
-  let baseDir     = imgPath ^. directory
-      [name, ext] = case splitOn "." $ imgPath ^. filename of
-        (n:x:_) -> [n, x]
-        _       -> error "Invalid filename/extension."
-  in baseDir <> "/" <> name <> suffix <> "." <> ext
