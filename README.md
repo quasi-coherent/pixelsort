@@ -7,12 +7,18 @@ Full list of options:
 ``` bash
 pixelsort
 
-Usage: pixelsort --file ARG [-r] [-g] [-b] [-a] [-M] [-L] [-H] [--rand]
-                 [--row-min ARG] [--row-max ARG] [--col-min ARG] [--col-max ARG]
+Usage: pixelsort --file ARG [--row-min ARG] [--row-max ARG] [--col-min ARG]
+                 [--col-max ARG] [--unbroken] [-r] [-g] [-b] [-a] [-M] [-L] [-H]
+                 [-N] [-S] [--rand]
 
 Available options:
   -h,--help                Show this help text
   --file ARG               Image to sort
+  --row-min ARG            Row to start pixel sorting
+  --row-max ARG            Row to end pixel sorting
+  --col-min ARG            Column to start pixel sorting
+  --col-max ARG            Column to end pixel sorting
+  --unbroken               Sort image that is not broken into rows
   -r                       Sort by red
   -g                       Sort by green
   -b                       Sort by blue
@@ -20,13 +26,11 @@ Available options:
   -M                       Sort by average of pixel values
   -L                       Sort by luminance
   -H                       Sort by hue
-  -N                       Sort by norm of the pixel considered as a point in 4D space
-  -S                       Sort by a step function (with 8 steps) of hue, luminance, and maximum pixel value
+  -N                       Sort by norm of the pixels considered as points in
+                           4-dimensional space
+  -S                       Sort by a step function (with 8 steps) of hue,
+                           luminance, and maximum pixel value
   --rand                   Sort by random comparison of pixel properties
-  --row-min ARG            Row to start pixel sorting
-  --row-max ARG            Row to end pixel sorting
-  --col-min ARG            Column to start pixel sorting
-  --col-max ARG            Column to end pixel sorting
 ```
 
 With `pixelsort` somewhere on your path,
@@ -35,7 +39,7 @@ With `pixelsort` somewhere on your path,
 pixelsort --file /path/to/image.jpg -r -g -b
 ```
 
-will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, for example, and save the resulting images in the same location as the original (filename being `sorted-r-image.jpg`, etc.).
+will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, for example, and save the resulting images in the same location as the original (filename being `sorted-r-image.jpg`, etc.).  Applying the `--unbroken` flag will treat the image as one row instead of contigious rows.
 
 ## examples
 ![original](repo_assets/orig.jpg)
