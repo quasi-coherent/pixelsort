@@ -32,7 +32,7 @@ main = do
           <> "Row/column min/max must be constrained by these bounds, and min must be less than, or equal to, max.")
   let sortOptions = filter (/= Inactive)
         [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
-  writeSortedImages cliPath cliMask orig
+  writeSortedImages cliPath orig
     (if cliUnbroken then makeUnbrokenSortedImage else makeSortedImage cliMask)
     sortOptions
   where
