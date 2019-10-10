@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns    #-}
+{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
@@ -24,23 +25,16 @@ import           System.Random
 
 main :: IO ()
 main = do
-  Opts {..} <- execParser optsParser
-  orig <- either (error "Couldn't read image") convertRGBA8 <$> readImage oImgPath
-  when (invalidMask oImgMask orig)
+  CLI {..} <- execParser cliParser
+  orig <- either (error "Couldn't read image") convertRGBA8 <$> readImage cliPath
+  when (invalidMask cliMask orig)
     (error $ "Image dimension is " <> show (imageHeight orig) <> " by " <> show (imageWidth orig) <> ". "
           <> "Row/column min/max must be constrained by these bounds, and min must be less than, or equal to, max.")
-  when oRed (writePng (makeFileName oImgPath "-sorted-r") $ makeSortedImage compareRed oImgMask orig)
-  when oGreen (writePng (makeFileName oImgPath "-sorted-g") $ makeSortedImage compareGreen oImgMask orig)
-  when oBlue (writePng (makeFileName oImgPath "-sorted-b") $ makeSortedImage compareBlue oImgMask orig)
-  when oAlpha (writePng (makeFileName oImgPath "-sorted-a") $ makeSortedImage compareAlpha oImgMask orig)
-  when oAverage (writePng (makeFileName oImgPath "-sorted-M") $ makeSortedImage compareAverage oImgMask orig)
-  when oLuminance (writePng (makeFileName oImgPath "-sorted-L") $ makeSortedImage compareLuminance oImgMask orig)
-  when oHue (writePng (makeFileName oImgPath "-sorted-H") $ makeSortedImage compareHue oImgMask orig)
-  when oNorm (writePng (makeFileName oImgPath "-sorted-N") $ makeSortedImage compareNorm oImgMask orig)
-  when oStep (writePng (makeFileName oImgPath "-sorted-S") $ makeSortedImage compareStep oImgMask orig)
-  when oPortion (writePng (makeFileName oImgPath "-sorted-P") $ makeUnbrokenSortedImage compareHue orig)
-  when oRandom $ compareRandomly >>= \ord ->
-    writePng (makeFileName oImgPath "-sorted-rand") $ makeSortedImage ord oImgMask orig
+  let sortOptions = filter (/= Inactive)
+        [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
+  writeSortedImages cliPath cliMask orig
+    (if cliUnbroken then makeUnbrokenSortedImage else makeSortedImage)
+    sortOptions
   where
     invalidMask ImgMask {..} orig =
       let rMin = fromMaybe 0 imRowMin
@@ -49,29 +43,24 @@ main = do
           cMax = fromMaybe (imageWidth orig) imColMax
       in rMin < 0 || rMax > imageHeight orig || cMin < 0 || cMax > imageWidth orig || (cMin > cMax || rMin > rMax)
 
-    makeFileName imgPath suffix =
-      let baseDir     = imgPath ^. directory
-          [name, ext] = case splitOn "." $ imgPath ^. filename of
-            (n:x:_) -> [n, x]
-            _       -> error "Invalid filename/extension."
-      in baseDir <> "/" <> name <> suffix <> "." <> ext
+    cliParser = info (helper <*> parseCli) (header "pixelsort")
 
-    optsParser = info (helper <*> parseOpts) (header "pixelsort")
-
-    parseOpts = Opts
+    parseCli = CLI
       <$> strOption (long "file" <> help "Image to sort")
-      <*> switch (short 'r' <> help "Sort by red")
-      <*> switch (short 'g' <> help "Sort by green")
-      <*> switch (short 'b' <> help "Sort by blue")
-      <*> switch (short 'a' <> help "Sort by alpha")
-      <*> switch (short 'M' <> help "Sort by average of pixel values")
-      <*> switch (short 'L' <> help "Sort by luminance")
-      <*> switch (short 'H' <> help "Sort by hue")
-      <*> switch (short 'N' <> help "Sort by norm of the pixels considered as points in 4-dimensional space")
-      <*> switch (short 'S' <> help "Sort by a step function (with 8 steps) of hue, luminance, and maximum pixel value")
-      <*> switch (short 'P' <> help "Sort unbroken picture")
-      <*> switch (long "rand" <> help "Sort by random comparison of pixel properties")
       <*> parseImgMask
+      <*> switch (long "unbroken" <> help "Sort image that is not broken into rows")
+      <*> flag'' Red (short 'r' <> help "Sort by red")
+      <*> flag'' Green (short 'g' <> help "Sort by green")
+      <*> flag'' Blue (short 'b' <> help "Sort by blue")
+      <*> flag'' Alpha (short 'a' <> help "Sort by alpha")
+      <*> flag'' Average (short 'M' <> help "Sort by average of pixel values")
+      <*> flag'' Luminance (short 'L' <> help "Sort by luminance")
+      <*> flag'' Hue (short 'H' <> help "Sort by hue")
+      <*> flag'' Norm (short 'N' <> help "Sort by norm of the pixels considered as points in 4-dimensional space")
+      <*> flag'' Step (short 'S' <> help "Sort by a step function (with 8 steps) of hue, luminance, and maximum pixel value")
+      <*> flag'' Random (long "rand" <> help "Sort by random comparison of pixel properties")
+
+    flag'' opt modOpts = flag' opt modOpts <|> pure Inactive
 
     parseImgMask = ImgMask
       <$> optional (option auto $ long "row-min" <> help "Row to start pixel sorting")
@@ -79,6 +68,11 @@ main = do
       <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting")
       <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting")
 
+
+-- | The possible ways to sort a row.
+data SortOption
+  = Red | Green | Blue | Alpha | Average | Luminance | Hue | Norm | Step | Random | Inactive
+  deriving (Eq, Show)
 
 
 -- | The subset of the image to sort.
@@ -91,21 +85,55 @@ data ImgMask = ImgMask
 
 
 -- | CLI.
-data Opts = Opts
-  { oImgPath   :: FilePath
-  , oRed       :: Bool
-  , oGreen     :: Bool
-  , oBlue      :: Bool
-  , oAlpha     :: Bool
-  , oAverage   :: Bool
-  , oLuminance :: Bool
-  , oHue       :: Bool
-  , oNorm      :: Bool
-  , oStep      :: Bool
-  , oPortion   :: Bool
-  , oRandom    :: Bool
-  , oImgMask   :: ImgMask
+data CLI = CLI
+  { cliPath      :: FilePath
+  , cliMask      :: ImgMask
+  , cliUnbroken  :: Bool
+  , cliRed       :: SortOption
+  , cliGreen     :: SortOption
+  , cliBlue      :: SortOption
+  , cliAlpha     :: SortOption
+  , cliAverage   :: SortOption
+  , cliLuminance :: SortOption
+  , cliHue       :: SortOption
+  , cliNorm      :: SortOption
+  , cliStep      :: SortOption
+  , cliRandom    :: SortOption
   } deriving (Eq, Show)
+
+
+-- | Write all images according to command line sort options.
+writeSortedImages
+  :: FilePath -- ^ Path to the original image.
+  -> ImgMask -- ^ Subset of the image to short.
+  -> Image PixelRGBA8 -- ^ Original image.
+  -> (PixelOrdering -> ImgMask -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
+  -> [SortOption] -- ^ Collection of sort options.
+  -> IO ()
+writeSortedImages path mask orig sort = mapM_ (writeSortedImage path mask orig sort)
+
+
+-- | Sort, given an option, and write the sorted image to the filesystem.
+writeSortedImage
+  :: FilePath -- ^ Path the original image.
+  -> ImgMask -- ^ Subset of the image to short.
+  -> Image PixelRGBA8 -- ^ Original image.
+  -> (PixelOrdering -> ImgMask -> Image PixelRGBA8 -> Image PixelRGBA8) -- ^ Function producing the sorted image.
+  -> SortOption -- ^ How to sort.
+  -> IO ()
+writeSortedImage path mask orig sort = \case
+  Red       -> writePng (makeFileName path "-sorted-r") $ sort compareRed mask orig
+  Green     -> writePng (makeFileName path "-sorted-g") $ sort compareGreen mask orig
+  Blue      -> writePng (makeFileName path "-sorted-b") $ sort compareBlue mask orig
+  Alpha     -> writePng (makeFileName path "-sorted-a") $ sort compareAlpha mask orig
+  Average   -> writePng (makeFileName path "-sorted-M") $ sort compareAverage mask orig
+  Luminance -> writePng (makeFileName path "-sorted-L") $ sort compareLuminance mask orig
+  Hue       -> writePng (makeFileName path "-sorted-H") $ sort compareHue mask orig
+  Norm      -> writePng (makeFileName path "-sorted-N") $ sort compareNorm mask orig
+  Step      -> writePng (makeFileName path "-sorted-S") $ sort compareStep mask orig
+  Random    -> compareRandomly >>= \ord ->
+    writePng (makeFileName path "-sorted-rand") $ makeSortedImage ord mask orig
+  Inactive  -> error "Attempted to write a sorted image with no sort option provided."
 
 
 -- | Sort the image with the given ordering.
@@ -136,12 +164,14 @@ makeSortedImage f ImgMask {..} img@Image {..} = runST $ do
           writePixel mimg c r (v V.! (c - ic))
           writeRow (c + 1) c' ic r v mimg
 
+
 -- | Sort the image without breaking it into rows of pixels.
 makeUnbrokenSortedImage
-  :: PixelOrdering
+  :: PixelOrdering -- ^ Sorting function.
+  -> ImgMask -- ^ Subset of the image to sort, ignored by this function.
+  -> Image PixelRGBA8 -- ^ Image to sort.
   -> Image PixelRGBA8
-  -> Image PixelRGBA8
-makeUnbrokenSortedImage f img@Image {..} = runST $ do
+makeUnbrokenSortedImage f _ img@Image {..} = runST $ do
   mimg <- unsafeThawImage img
   let rawImage = makeRow (VS.length imageData) imageData
       sortedImage = V.modify (VA.sortBy f) rawImage
@@ -158,6 +188,7 @@ makeUnbrokenSortedImage f img@Image {..} = runST $ do
       | otherwise = do
           writePixel mimg c r (v V.! c)
           writeRow r (c + 1) v mimg
+
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
 makeRow
@@ -285,3 +316,12 @@ compareRandomly = do
       compare' 3 2 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ b2 _) = compare a1 b2
       compare' 3 3 (PixelRGBA8 _ _ _ a1) (PixelRGBA8 _ _ _ a2) = compare a1 a2
       compare' _ _ _ _                                         = error "The impossible has happened"
+
+
+makeFileName :: FilePath -> String -> FilePath
+makeFileName imgPath suffix =
+  let baseDir     = imgPath ^. directory
+      [name, ext] = case splitOn "." $ imgPath ^. filename of
+        (n:x:_) -> [n, x]
+        _       -> error "Invalid filename/extension."
+  in baseDir <> "/" <> name <> suffix <> "." <> ext

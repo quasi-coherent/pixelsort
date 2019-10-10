@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5c3c02b26d12f4d4876d82bcd91a70f6d709dc84786cf803fb2f4385bf149dd5
+-- hash: b3593c71fc6c9f0d9df236c047154d852e59b1cd0cb8903b954cef6c722a0ce1
 
 name:           pixelsort
 version:        0.1.0.0
@@ -38,7 +38,7 @@ executable pixelsort
     , lens
     , optparse-applicative
     , random
-    , sequence >=0.9.8
+    , sequence
     , split
     , vector
     , vector-algorithms
