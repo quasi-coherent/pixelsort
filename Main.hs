@@ -199,12 +199,6 @@ makeChunksSortedImage ch f img@Image {..} = runST $ do
           writePixel mimg c r (v V.! c)
           writeChunk r (c + 1) w m v mimg
 
-    -- go r d mimg
-      -- | r >= imageHeight = unsafeFreezeImage mimg
-      -- | otherwise = do
-          -- void $ writeRow r 0 (V.take imageWidth d) mimg
-          -- go (r + chunkHeigth) (V.drop imageWidth d) mimg
-
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
 makeRow
   :: Int
