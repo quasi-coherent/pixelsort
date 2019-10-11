@@ -14,11 +14,11 @@ Usage: pixelsort --file ARG [--row-min ARG] [--row-max ARG] [--col-min ARG]
 Available options:
   -h,--help                Show this help text
   --file ARG               Image to sort
-  --row-min ARG            Row to start pixel sorting
-  --row-max ARG            Row to end pixel sorting
-  --col-min ARG            Column to start pixel sorting
-  --col-max ARG            Column to end pixel sorting
-  --unbroken               Sort image that is not broken into rows
+  --row-min INT            Row to start pixel sorting
+  --row-max INT            Row to end pixel sorting
+  --col-min INT            Column to start pixel sorting
+  --col-max INT            Column to end pixel sorting
+  --chunks INT             Sort image that is broken into X vertical chunks
   -r                       Sort by red
   -g                       Sort by green
   -b                       Sort by blue
