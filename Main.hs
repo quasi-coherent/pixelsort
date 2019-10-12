@@ -174,13 +174,13 @@ makeSortedImage ImgMask {..} f img@Image {..} = runST $ do
 
 -- | Sort the image without breaking it into rows of pixels.
 makeChunksSortedImage
-  :: Int
+  :: Int -- ^ Number of chunks.
   -> PixelOrdering -- ^ Sorting function.
   -> Image PixelRGBA8 -- ^ Image to sort.
   -> Image PixelRGBA8
-makeChunksSortedImage ch f img@Image {..} = runST $ do
+makeChunksSortedImage n f img@Image {..} = runST $ do
   mimg <- unsafeThawImage img
-  let chunkHeight = imageHeight `div` ch
+  let chunkHeight = imageHeight `div` n
   go 0 chunkHeight imageData mimg
   where
     go r chh d mimg
@@ -194,16 +194,11 @@ makeChunksSortedImage ch f img@Image {..} = runST $ do
 
     writeChunk r c w m v mimg
       | c >= m = unsafeFreezeImage mimg
-      | c - 1 `mod` w == 0 && c /= 1 = writeChunk (r+1) (c+1) w m v mimg
+      | c - 1 `mod` w == 0 && c /= 1 = writeChunk (r + 1) (c + 1) w m v mimg
       | otherwise = do
           writePixel mimg c r (v V.! c)
           writeChunk r (c + 1) w m v mimg
 
-    -- go r d mimg
-      -- | r >= imageHeight = unsafeFreezeImage mimg
-      -- | otherwise = do
-          -- void $ writeRow r 0 (V.take imageWidth d) mimg
-          -- go (r + chunkHeigth) (V.drop imageWidth d) mimg
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
 makeRow
