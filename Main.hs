@@ -33,7 +33,9 @@ main = do
   let sortOptions = filter (/= Inactive)
         [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
   writeSortedImages cliPath orig
-    (if cliUnbroken then makeUnbrokenSortedImage else makeSortedImage cliMask)
+    (case cliChunks of
+       Just val -> makeChunksSortedImage val
+       Nothing  -> makeSortedImage cliMask)
     sortOptions
   where
     invalidMask ImgMask {..} orig =
@@ -48,7 +50,7 @@ main = do
     parseCli = CLI
       <$> strOption (long "file" <> help "Image to sort")
       <*> parseImgMask
-      <*> switch (long "unbroken" <> help "Sort image that is not broken into rows")
+      <*> (optional $ option auto $ long "chunks" <> help "Sort image that is broken into X vertical chunks" <> metavar "INT")
       <*> flag'' Red (short 'r' <> help "Sort by red")
       <*> flag'' Green (short 'g' <> help "Sort by green")
       <*> flag'' Blue (short 'b' <> help "Sort by blue")
@@ -63,10 +65,10 @@ main = do
     flag'' opt modOpts = flag' opt modOpts <|> pure Inactive
 
     parseImgMask = ImgMask
-      <$> optional (option auto $ long "row-min" <> help "Row to start pixel sorting")
-      <*> optional (option auto $ long "row-max" <> help "Row to end pixel sorting")
-      <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting")
-      <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting")
+      <$> optional (option auto $ long "row-min" <> help "Row to start pixel sorting" <> metavar "INT")
+      <*> optional (option auto $ long "row-max" <> help "Row to end pixel sorting" <> metavar "INT")
+      <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting" <> metavar "INT")
+      <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting" <> metavar "INT")
 
 
 -- | The possible ways to sort a row.
@@ -88,7 +90,7 @@ data ImgMask = ImgMask
 data CLI = CLI
   { cliPath      :: FilePath
   , cliMask      :: ImgMask
-  , cliUnbroken  :: Bool
+  , cliChunks    :: Maybe Int
   , cliRed       :: SortOption
   , cliGreen     :: SortOption
   , cliBlue      :: SortOption
@@ -171,28 +173,37 @@ makeSortedImage ImgMask {..} f img@Image {..} = runST $ do
 
 
 -- | Sort the image without breaking it into rows of pixels.
-makeUnbrokenSortedImage
-  :: PixelOrdering -- ^ Sorting function.
+makeChunksSortedImage
+  :: Int
+  -> PixelOrdering -- ^ Sorting function.
   -> Image PixelRGBA8 -- ^ Image to sort.
   -> Image PixelRGBA8
-makeUnbrokenSortedImage f img@Image {..} = runST $ do
+makeChunksSortedImage ch f img@Image {..} = runST $ do
   mimg <- unsafeThawImage img
-  let rawImage = makeRow (VS.length imageData) imageData
-      sortedImage = V.modify (VA.sortBy f) rawImage
-  go 0 sortedImage mimg
+  let chunkHeight = imageHeight `div` ch
+  go 0 chunkHeight imageData mimg
   where
-    go r d mimg
+    go r chh d mimg
       | r >= imageHeight = unsafeFreezeImage mimg
       | otherwise = do
-          void $ writeRow r 0 (V.take imageWidth d) mimg
-          go (r + 1) (V.drop imageWidth d) mimg
+          let l = if t * 2 > VS.length d then VS.length d else t where t = 4 * imageWidth * chh
+          let rawChunk = makeRow l (VS.take l d)
+              sortedChunk = V.modify (VA.sortBy f) rawChunk
+          void $ writeChunk r 0 imageWidth (V.length sortedChunk) sortedChunk mimg
+          go (r + chh) chh (VS.drop l d) mimg
 
-    writeRow r c v mimg
-      | c >= imageWidth = unsafeFreezeImage mimg
+    writeChunk r c w m v mimg
+      | c >= m = unsafeFreezeImage mimg
+      | c - 1 `mod` w == 0 && c /= 1 = writeChunk (r+1) (c+1) w m v mimg
       | otherwise = do
           writePixel mimg c r (v V.! c)
-          writeRow r (c + 1) v mimg
+          writeChunk r (c + 1) w m v mimg
 
+    -- go r d mimg
+      -- | r >= imageHeight = unsafeFreezeImage mimg
+      -- | otherwise = do
+          -- void $ writeRow r 0 (V.take imageWidth d) mimg
+          -- go (r + chunkHeigth) (V.drop imageWidth d) mimg
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
 makeRow
