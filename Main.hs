@@ -48,7 +48,7 @@ main = do
     parseCli = CLI
       <$> strOption (long "file" <> help "Image to sort")
       <*> parseImgMask
-      <*> (optional $ option auto $ long "chunks" <> help "Sort image that is broken into X vertical chunks" <> metavar "INT")
+      <*> optional (option auto $ long "chunks" <> help "Sort image that is broken into X vertical chunks" <> metavar "INT")
       <*> flag'' Red (short 'r' <> help "Sort by red")
       <*> flag'' Green (short 'g' <> help "Sort by green")
       <*> flag'' Blue (short 'b' <> help "Sort by blue")
