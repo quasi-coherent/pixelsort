@@ -33,9 +33,7 @@ main = do
   let sortOptions = filter (/= Inactive)
         [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
   writeSortedImages cliPath orig
-    (case cliChunks of
-       Just val -> makeChunksSortedImage val
-       Nothing  -> makeSortedImage cliMask)
+    (maybe (makeSortedImage cliMask) makeChunksSortedImage cliChunks)
     sortOptions
   where
     invalidMask ImgMask {..} orig =
