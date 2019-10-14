@@ -18,7 +18,8 @@ Available options:
   --row-max INT            Row to end pixel sorting
   --col-min INT            Column to start pixel sorting
   --col-max INT            Column to end pixel sorting
-  --chunks INT             Sort image that is broken into X vertical chunks
+  --v-par INT              Sort image that is broken into X vertical partitions
+  --h-par INT              Sort image that is broken into X horizontal partitions
   -r                       Sort by red
   -g                       Sort by green
   -b                       Sort by blue
