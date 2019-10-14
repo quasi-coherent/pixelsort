@@ -1,7 +1,8 @@
-{-# LANGUAGE BangPatterns    #-}
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
+{-# LANGUAGE BangPatterns    #-}
+
 
 module Main where
 
@@ -11,7 +12,7 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.ST
 import           Data.Foldable (toList)
-import           Data.List.Split
+import qualified Data.List.Split as SPL
 import           Data.Maybe
 import qualified Data.Sequence as Seq
 import qualified Data.Vector as V
@@ -33,9 +34,10 @@ main = do
   let sortOptions = filter (/= Inactive)
         [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
   writeSortedImages cliPath orig
-    (case cliChunks of
-       Just val -> makeChunksSortedImage val
-       Nothing  -> makeSortedImage cliMask)
+    (case (cliHParts, cliVParts) of
+       (Just val, _) -> makeHPartsSortedImage val
+       (_, Just val) -> makeVPartsSortedImage val
+       (_, _)        -> makeSortedImage cliMask)
     sortOptions
   where
     invalidMask ImgMask {..} orig =
@@ -50,7 +52,8 @@ main = do
     parseCli = CLI
       <$> strOption (long "file" <> help "Image to sort")
       <*> parseImgMask
-      <*> optional (option auto $ long "chunks" <> help "Sort image that is broken into X vertical chunks" <> metavar "INT")
+      <*> optional (option auto $ long "h-par" <> help "Sort image that is broken into X horizontal partitions" <> metavar "INT")
+      <*> optional (option auto $ long "v-par" <> help "Sort image that is broken into X vertical partitions" <> metavar "INT")
       <*> flag'' Red (short 'r' <> help "Sort by red")
       <*> flag'' Green (short 'g' <> help "Sort by green")
       <*> flag'' Blue (short 'b' <> help "Sort by blue")
@@ -90,7 +93,8 @@ data ImgMask = ImgMask
 data CLI = CLI
   { cliPath      :: FilePath
   , cliMask      :: ImgMask
-  , cliChunks    :: Maybe Int
+  , cliHParts    :: Maybe Int
+  , cliVParts    :: Maybe Int
   , cliRed       :: SortOption
   , cliGreen     :: SortOption
   , cliBlue      :: SortOption
@@ -137,7 +141,7 @@ writeSortedImage path orig sort = \case
   where
     makeFileName imgPath suffix =
       let baseDir     = imgPath ^. directory
-          [name, ext] = case splitOn "." $ imgPath ^. filename of
+          [name, ext] = case SPL.splitOn "." $ imgPath ^. filename of
             (n:x:_) -> [n, x]
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
@@ -171,14 +175,13 @@ makeSortedImage ImgMask {..} f img@Image {..} = runST $ do
           writePixel mimg c r (v V.! (c - ic))
           writeRow (c + 1) c' ic r v mimg
 
-
--- | Sort the image without breaking it into rows of pixels.
-makeChunksSortedImage
+-- | Sort the image partitioned into horizontal partitions
+makeHPartsSortedImage
   :: Int
   -> PixelOrdering -- ^ Sorting function.
   -> Image PixelRGBA8 -- ^ Image to sort.
   -> Image PixelRGBA8
-makeChunksSortedImage ch f img@Image {..} = runST $ do
+makeHPartsSortedImage ch f img@Image {..} = runST $ do
   mimg <- unsafeThawImage img
   let chunkHeight = imageHeight `div` ch
   go 0 chunkHeight imageData mimg
@@ -189,15 +192,58 @@ makeChunksSortedImage ch f img@Image {..} = runST $ do
           let l = if t * 2 > VS.length d then VS.length d else t where t = 4 * imageWidth * chh
           let rawChunk = makeRow l (VS.take l d)
               sortedChunk = V.modify (VA.sortBy f) rawChunk
-          void $ writeChunk r 0 imageWidth (V.length sortedChunk) sortedChunk mimg
+          void $ writeHPart r 0 imageWidth (V.length sortedChunk) sortedChunk mimg
           go (r + chh) chh (VS.drop l d) mimg
 
-    writeChunk r c w m v mimg
+    writeHPart r c w m v mimg
       | c >= m = unsafeFreezeImage mimg
-      | c - 1 `mod` w == 0 && c /= 1 = writeChunk (r+1) (c+1) w m v mimg
+      | c - 1 `mod` w == 0 && c /= 1 = writeHPart (r+1) (c+1) w m v mimg
       | otherwise = do
           writePixel mimg c r (v V.! c)
-          writeChunk r (c + 1) w m v mimg
+          writeHPart r (c + 1) w m v mimg
+
+-- | Sort the image partitioned into vertical partitions
+makeVPartsSortedImage
+  :: Int
+  -> PixelOrdering -- ^ Sorting function.
+  -> Image PixelRGBA8 -- ^ Image to sort.
+  -> Image PixelRGBA8
+makeVPartsSortedImage ch f img@Image {..} = runST $ do
+  mimg <- unsafeThawImage img
+  let chunkWidth = imageWidth `div` ch
+  go 0 chunkWidth imageData mimg
+  where
+    go !c !chw !d !mimg
+      | c >= imageWidth = unsafeFreezeImage mimg
+      | otherwise = do
+          let rl = if chw * 2 > imageWidth - c then imageWidth - c else chw
+              sortedChunk = V.modify (VA.sortBy f) (chopAndMakeRow rl (imageWidth - rl) (VS.drop (4*c) d))
+          void $ writeVPart c c 0 rl sortedChunk mimg
+          go (c+rl) chw d mimg
+
+    writeVPart !ic !nc !r !chw !v !mimg
+      | r >= imageHeight = unsafeFreezeImage mimg
+      | fromIntegral (nc - ic) `mod` fromIntegral chw == 0 && (nc-ic) /= 0 = writeVPart ic ic (r+1) chw v mimg
+      | otherwise = do
+          writePixel mimg nc r (v V.! 0)
+          writeVPart ic (nc + 1) r chw (V.drop 1 v) mimg
+
+-- | Take n and skip m of the image's raw represantation
+-- | and make one row 'PixelRGBA8 from that - O(numofpixels)
+chopAndMakeRow
+  :: Int
+  -> Int
+  -> VS.Vector Word8
+  -> V.Vector PixelRGBA8
+chopAndMakeRow = go Seq.empty 0
+  where
+    go !acc !nn !n !m !d
+      | VS.length d == 0 = V.fromList $ toList acc
+      | n == 0 = go acc nn nn m (VS.drop (4 * m) d)
+      | otherwise =
+        go (acc Seq.|> makePixel (VS.take 4 d)) (max nn n) (n-1) m (VS.drop 4 d)
+
+    makePixel v = PixelRGBA8 (v VS.! 0) (v VS.! 1) (v VS.! 2) (v VS.! 3)
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
 makeRow
