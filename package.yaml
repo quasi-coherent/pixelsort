@@ -30,4 +30,3 @@ executables:
     - vector
     - vector-algorithms
     - containers
-    - sequence

@@ -61,6 +61,6 @@ will sort the rows of pixels of `image.jpg` by red, green, blue, respectively, f
 
 ![random](repo_assets/sorted-rand.jpg)
 
-`pixelsort -H  --unbroken --file repo_assets/orig.jpg`
+`pixelsort -H  --chunks 1 --file repo_assets/orig.jpg`
 
 ![unbroken](repo_assets/orig-sorted-H.jpg)
