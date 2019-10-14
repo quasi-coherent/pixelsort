@@ -1,8 +1,7 @@
+{-# LANGUAGE BangPatterns    #-}
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
-{-# LANGUAGE BangPatterns    #-}
-
 
 module Main where
 
@@ -12,7 +11,7 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.ST
 import           Data.Foldable (toList)
-import qualified Data.List.Split as SPL
+import           Data.List.Split
 import           Data.Maybe
 import qualified Data.Sequence as Seq
 import qualified Data.Vector as V
@@ -141,7 +140,7 @@ writeSortedImage path orig sort = \case
   where
     makeFileName imgPath suffix =
       let baseDir     = imgPath ^. directory
-          [name, ext] = case SPL.splitOn "." $ imgPath ^. filename of
+          [name, ext] = case splitOn "." $ imgPath ^. filename of
             (n:x:_) -> [n, x]
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
