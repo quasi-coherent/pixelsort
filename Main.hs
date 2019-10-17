@@ -182,8 +182,9 @@ getRectangleFromCols :: Int -> Int -> Int -> Int -> Rectangle
 getRectangleFromCols cMin cMax rMin rMax = Rectangle cMin rMin cMax rMax
 
 chopOfTopAndBottom :: Int -> Int -> Int -> VS.Vector Word8 -> VS.Vector Word8
-chopOfTopAndBottom rMin rMax iw d = VS.drop dro $ (VS.take (traceShow (show tak ++ "--" ++ show dro ) tak ) d)
-  where tak = rMax  * 4 * iw
+chopOfTopAndBottom rMin rMax iw d = v
+  where v = VS.drop dro $ VS.take tak d
+        tak = rMax  * 4 * iw
         dro = 4* iw * rMin
 
 writeRectangle :: (Control.Monad.Primitive.PrimMonad m, Pixel a)
@@ -241,24 +242,14 @@ makeHPartsSortedImage ch f img@Image {..} = runST $ do
   go 0 chunkHeight imageData mimg
   where
     go r chh d mimg
-      | r >= imageHeight = unsafeFreezeImage mimg
+      | r + 1 >= imageHeight = unsafeFreezeImage mimg
       | otherwise = do
-          let l = if t * 2 > VS.length d then VS.length d else t where t = 4 * imageWidth * chh
-          --let rawChunk = makeRow l (VS.take l d)
-           --   sortedChunk = V.modify (VA.sortBy f) rawChunk
-          --void $ writeHPart r 0 imageWidth (V.length sortedChunk) sortedChunk mimg
-          let rt = getRectangleFromCols 0 imageWidth r (r + chh)
+          let rows = if chh * 2 > imageHeight - r + 1 then imageHeight - r else chh
+          let rt = getRectangleFromCols 0 (imageWidth-1) r (r + rows-1)
           let dd = getRectangleAsRow imageWidth d rt
-              sortedChunk = V.modify (VA.sortBy f) (traceShow ("bla"++show (V.length dd)) dd)
-          void $ writeRectangle mimg sortedChunk (traceShow (show rt ++ "aaaa") rt)
-          go (r + chh) chh (VS.drop l d) mimg
-
-    writeHPart r c w m v mimg
-      | c >= m = unsafeFreezeImage mimg
-      | c - 1 `mod` w == 0 && c /= 1 = writeHPart (r+1) (c+1) w m v mimg
-      | otherwise = do
-          writePixel mimg c r (v V.! c)
-          writeHPart r (c + 1) w m v mimg
+              sortedChunk =  V.modify (VA.sortBy f) dd
+          void $ writeRectangle mimg sortedChunk rt
+          go (r + chh) chh d mimg
 
 -- | Sort the image partitioned into vertical partitions
 makeVPartsSortedImage
