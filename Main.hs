@@ -1,7 +1,8 @@
-{-# LANGUAGE BangPatterns    #-}
-{-# LANGUAGE LambdaCase      #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns              #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE RecordWildCards           #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
+{-# LANGUAGE ExistentialQuantification #-}
 
 module Main where
 
@@ -9,6 +10,7 @@ import           Codec.Picture
 import           Codec.Picture.Types
 import           Control.Lens
 import           Control.Monad
+import           Control.Monad.Primitive
 import           Control.Monad.ST
 import           Data.Foldable (toList)
 import           Data.List.Split
@@ -18,6 +20,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
 import           Data.Word (Word8)
+import           Debug.Trace
 import           Options.Applicative
 import           System.FilePath.Lens
 import           System.Random
@@ -72,6 +75,12 @@ main = do
       <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting" <> metavar "INT")
       <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting" <> metavar "INT")
 
+data Rectangle = Rectangle
+  { x1 :: Int
+  , y1 :: Int
+  , x2 :: Int
+  , y2 :: Int
+} deriving (Show)
 
 -- | The possible ways to sort a row.
 data SortOption
@@ -145,6 +154,52 @@ writeSortedImage path orig sort = \case
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
 
+-- | Take n and skip m of the image's raw represantation
+-- | and make one row 'PixelRGBA8 from that - O(numofpixels)
+chopAndMakeRow
+  :: Int
+  -> Int
+  -> VS.Vector Word8
+  -> V.Vector PixelRGBA8
+chopAndMakeRow = go Seq.empty 0
+  where
+    go !acc !nn !n !m !d
+      -- | VS.length (traceShow ("nn: " ++ show nn ++ " n: " ++ show n ++ " m: " ++ show m) d) == 0 = V.fromList $ toList acc
+      | VS.length d == 0 = V.fromList $ toList acc
+      | n == 0 = go acc nn nn m (VS.drop (4 * m) d)
+      | otherwise =
+        go (acc Seq.|> makePixel (VS.take 4 d)) (max nn n) (n-1) m (VS.drop 4 d)
+
+    makePixel v = PixelRGBA8 (v VS.! 0) (v VS.! 1) (v VS.! 2) (v VS.! 3)
+
+getRectangleAsRow :: Int -> VS.Vector Word8 -> Rectangle -> V.Vector PixelRGBA8
+getRectangleAsRow width d rt =
+  chopAndMakeRow recWidth (width - recWidth) (traceShow ("get rect" ++show (VS.length choppedD)) choppedD)
+  where recWidth = x2 rt - x1 rt
+        choppedD = chopOfTopAndBottom (y1 rt) (y2 rt) width (VS.drop (4 * x1 rt) d)
+
+getRectangleFromCols :: Int -> Int -> Int -> Int -> Rectangle
+getRectangleFromCols cMin cMax rMin rMax = Rectangle cMin rMin cMax rMax
+
+chopOfTopAndBottom :: Int -> Int -> Int -> VS.Vector Word8 -> VS.Vector Word8
+chopOfTopAndBottom rMin rMax iw d = VS.drop dro $ (VS.take (traceShow (show tak ++ "--" ++ show dro ) tak ) d)
+  where tak = rMax  * 4 * iw
+        dro = 4* iw * rMin
+
+writeRectangle :: (Control.Monad.Primitive.PrimMonad m, Pixel a)
+  => MutableImage (Control.Monad.Primitive.PrimState m) a -> V.Vector a -> Rectangle -> m (Image a)
+writeRectangle mmg vc rt =
+  writeRow (x1 rt) (x2 rt) (x1 rt) (y1 rt) (y2 rt) vc mmg
+  where
+    writeRow c c' ic r r' v mimg
+      -- | VS.length (traceShow ("nn: " ++ show nn ++ " n: " ++ show n ++ " m: " ++ show m) d) == 0 = V.fromList $ toList acc
+        | V.length v == 0 = unsafeFreezeImage mimg
+        -- | c >= (traceShow ("c:" ++show c ++ "c':" ++show c' ++ "ic:" ++show ic ++ "r:" ++show r ++ "r':" ++show r' ++ "vl:" ++show (V.length v))
+        | c >= c' = writeRow ic c' ic (r + 1) r' (V.drop (c'-ic) v) mimg
+        | otherwise = do
+            writePixel mimg c r (v V.! (c - ic))
+            writeRow (c + 1) c' ic r r' v mimg
+
 
 -- | Sort the image with the given ordering.
 makeSortedImage
@@ -189,9 +244,13 @@ makeHPartsSortedImage ch f img@Image {..} = runST $ do
       | r >= imageHeight = unsafeFreezeImage mimg
       | otherwise = do
           let l = if t * 2 > VS.length d then VS.length d else t where t = 4 * imageWidth * chh
-          let rawChunk = makeRow l (VS.take l d)
-              sortedChunk = V.modify (VA.sortBy f) rawChunk
-          void $ writeHPart r 0 imageWidth (V.length sortedChunk) sortedChunk mimg
+          --let rawChunk = makeRow l (VS.take l d)
+           --   sortedChunk = V.modify (VA.sortBy f) rawChunk
+          --void $ writeHPart r 0 imageWidth (V.length sortedChunk) sortedChunk mimg
+          let rt = getRectangleFromCols 0 imageWidth r (r + chh)
+          let dd = getRectangleAsRow imageWidth d rt
+              sortedChunk = V.modify (VA.sortBy f) (traceShow ("bla"++show (V.length dd)) dd)
+          void $ writeRectangle mimg sortedChunk (traceShow (show rt ++ "aaaa") rt)
           go (r + chh) chh (VS.drop l d) mimg
 
     writeHPart r c w m v mimg
@@ -216,33 +275,11 @@ makeVPartsSortedImage ch f img@Image {..} = runST $ do
       | c >= imageWidth = unsafeFreezeImage mimg
       | otherwise = do
           let rl = if chw * 2 > imageWidth - c then imageWidth - c else chw
-              sortedChunk = V.modify (VA.sortBy f) (chopAndMakeRow rl (imageWidth - rl) (VS.drop (4*c) d))
-          void $ writeVPart c c 0 rl sortedChunk mimg
+          let rt = getRectangleFromCols c (c+rl) 0 imageHeight
+          let dd = getRectangleAsRow imageWidth d (traceShow (show rt) rt)
+              sortedChunk = V.modify (VA.sortBy f) dd
+          void $ writeRectangle mimg sortedChunk rt
           go (c+rl) chw d mimg
-
-    writeVPart !ic !nc !r !chw !v !mimg
-      | r >= imageHeight = unsafeFreezeImage mimg
-      | fromIntegral (nc - ic) `mod` fromIntegral chw == 0 && (nc-ic) /= 0 = writeVPart ic ic (r+1) chw v mimg
-      | otherwise = do
-          writePixel mimg nc r (v V.! 0)
-          writeVPart ic (nc + 1) r chw (V.drop 1 v) mimg
-
--- | Take n and skip m of the image's raw represantation
--- | and make one row 'PixelRGBA8 from that - O(numofpixels)
-chopAndMakeRow
-  :: Int
-  -> Int
-  -> VS.Vector Word8
-  -> V.Vector PixelRGBA8
-chopAndMakeRow = go Seq.empty 0
-  where
-    go !acc !nn !n !m !d
-      | VS.length d == 0 = V.fromList $ toList acc
-      | n == 0 = go acc nn nn m (VS.drop (4 * m) d)
-      | otherwise =
-        go (acc Seq.|> makePixel (VS.take 4 d)) (max nn n) (n-1) m (VS.drop 4 d)
-
-    makePixel v = PixelRGBA8 (v VS.! 0) (v VS.! 1) (v VS.! 2) (v VS.! 3)
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
 makeRow
