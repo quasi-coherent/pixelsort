@@ -39,7 +39,7 @@ main = do
     (case (cliHParts, cliVParts) of
        (Just val, _) -> makeHPartsSortedImage val
        (_, Just val) -> makeVPartsSortedImage val
-       (_, _)        -> makeSortedImage cliMask)
+       (_, _)        -> makeHPartsSortedImage 0)
     sortOptions
   where
     invalidMask ImgMask {..} orig =
@@ -164,8 +164,8 @@ chopAndMakeRow
 chopAndMakeRow = go Seq.empty 0
   where
     go !acc !nn !n !m !d
-      -- | VS.length (traceShow ("nn: " ++ show nn ++ " n: " ++ show n ++ " m: " ++ show m) d) == 0 = V.fromList $ toList acc
-      | VS.length d == 0 = V.fromList $ toList acc
+      | VS.length (traceShow ("nn: " ++ show nn ++ " n: " ++ show n ++ " m: " ++ show m ++ " d ln: " ++ show (VS.length d) ++ " acc: " ++show (Seq.length acc)) d) == 0 = V.fromList $ toList acc
+      -- | VS.length d == 0 = V.fromList $ toList acc
       | n == 0 = go acc nn nn m (VS.drop (4 * m) d)
       | otherwise =
         go (acc Seq.|> makePixel (VS.take 4 d)) (max nn n) (n-1) m (VS.drop 4 d)
@@ -174,17 +174,17 @@ chopAndMakeRow = go Seq.empty 0
 
 getRectangleAsRow :: Int -> VS.Vector Word8 -> Rectangle -> V.Vector PixelRGBA8
 getRectangleAsRow width d rt =
-  chopAndMakeRow recWidth (width - recWidth) (traceShow ("get rect" ++show (VS.length choppedD)) choppedD)
-  where recWidth = x2 rt - x1 rt
-        choppedD = chopOfTopAndBottom (y1 rt) (y2 rt) width (VS.drop (4 * x1 rt) d)
+  chopAndMakeRow recWidth (width - recWidth) (traceShow (VS.length choppedD) choppedD)
+  where recWidth = x2 rt - x1 rt + 1
+        choppedD = chopOfTopAndBottom (y1 rt) (y2 rt) width (VS.drop (4 * x1 rt) (traceShow (VS.length d) d))
 
 getRectangleFromCols :: Int -> Int -> Int -> Int -> Rectangle
 getRectangleFromCols cMin cMax rMin rMax = Rectangle cMin rMin cMax rMax
 
 chopOfTopAndBottom :: Int -> Int -> Int -> VS.Vector Word8 -> VS.Vector Word8
 chopOfTopAndBottom rMin rMax iw d = v
-  where v = VS.drop dro $ VS.take tak d
-        tak = rMax  * 4 * iw
+  where v = VS.drop (traceShow dro dro) $ VS.take (traceShow tak tak) d
+        tak = (rMax+1) * 4 * iw
         dro = 4* iw * rMin
 
 writeRectangle :: (Control.Monad.Primitive.PrimMonad m, Pixel a)
@@ -195,8 +195,8 @@ writeRectangle mmg vc rt =
     writeRow c c' ic r r' v mimg
       -- | VS.length (traceShow ("nn: " ++ show nn ++ " n: " ++ show n ++ " m: " ++ show m) d) == 0 = V.fromList $ toList acc
         | V.length v == 0 = unsafeFreezeImage mimg
-        -- | c >= (traceShow ("c:" ++show c ++ "c':" ++show c' ++ "ic:" ++show ic ++ "r:" ++show r ++ "r':" ++show r' ++ "vl:" ++show (V.length v))
-        | c >= c' = writeRow ic c' ic (r + 1) r' (V.drop (c'-ic) v) mimg
+        | c > (traceShow ("c:" ++show c ++ "c':" ++show c' ++ "ic:" ++show ic ++ "r:" ++show r ++ "r':" ++show r' ++ "vl:" ++show (V.length v))
+          c') = writeRow ic c' ic (r + 1) r' (V.drop (c'-ic+1) v) mimg
         | otherwise = do
             writePixel mimg c r (v V.! (c - ic))
             writeRow (c + 1) c' ic r r' v mimg
@@ -238,17 +238,20 @@ makeHPartsSortedImage
   -> Image PixelRGBA8
 makeHPartsSortedImage ch f img@Image {..} = runST $ do
   mimg <- unsafeThawImage img
-  let chunkHeight = imageHeight `div` ch
+  let c = case ch == 0 of -- to do horizontal row by row
+        True  -> imageHeight
+        False -> ch
+  let chunkHeight = imageHeight `div` c
   go 0 chunkHeight imageData mimg
   where
     go r chh d mimg
-      | r + 1 >= imageHeight = unsafeFreezeImage mimg
+      | r + 1 > imageHeight = unsafeFreezeImage mimg
       | otherwise = do
           let rows = if chh * 2 > imageHeight - r + 1 then imageHeight - r else chh
           let rt = getRectangleFromCols 0 (imageWidth-1) r (r + rows-1)
           let dd = getRectangleAsRow imageWidth d rt
-              sortedChunk =  V.modify (VA.sortBy f) dd
-          void $ writeRectangle mimg sortedChunk rt
+              sortedChunk =  V.modify (VA.sortBy f) (traceShow "aaaa" dd)
+          void $ writeRectangle mimg sortedChunk (traceShow ("sdlkfjdslkfj" ++ show (V.length sortedChunk)) rt)
           go (r + chh) chh d mimg
 
 -- | Sort the image partitioned into vertical partitions
@@ -263,13 +266,15 @@ makeVPartsSortedImage ch f img@Image {..} = runST $ do
   go 0 chunkWidth imageData mimg
   where
     go !c !chw !d !mimg
-      | c >= imageWidth = unsafeFreezeImage mimg
+      | c + 1 > imageWidth = unsafeFreezeImage mimg
       | otherwise = do
-          let rl = if chw * 2 > imageWidth - c then imageWidth - c else chw
-          let rt = getRectangleFromCols c (c+rl) 0 imageHeight
-          let dd = getRectangleAsRow imageWidth d (traceShow (show rt) rt)
-              sortedChunk = V.modify (VA.sortBy f) dd
-          void $ writeRectangle mimg sortedChunk rt
+          let rl = if chw * 2 > imageWidth - c + 1 then imageWidth - c else chw
+          let rt = getRectangleFromCols c (c+rl-1) 0 (imageHeight-1)
+          let dd = getRectangleAsRow imageWidth d (traceShow (show rt ++ show rl) rt)
+              --sortedChunk = V.modify (VA.sortBy f) dd
+              sortedChunk = V.modify (VA.sortBy f) (traceShow "aaaa" dd)
+          --void $ writeRectangle mimg sortedChunk rt
+          void $ writeRectangle mimg sortedChunk (traceShow ("sdlkfjdslkfj" ++ show (V.length sortedChunk)) rt)
           go (c+rl) chw d mimg
 
 -- | Make one row of 'PixelRGBA8's from the image's raw representation.
