@@ -20,7 +20,6 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
 import           Data.Word (Word8)
-import           Debug.Trace
 import           Options.Applicative
 import           System.FilePath.Lens
 import           System.Random
@@ -183,7 +182,7 @@ chopAndMakeRow = go Seq.empty 0
 
 getRectangleAsRow :: Int -> V.Vector PixelRGBA8 -> Rectangle -> V.Vector PixelRGBA8
 getRectangleAsRow width d rt =
-  chopAndMakeRow recWidth (width - recWidth) (traceShow (show (V.length d)) V.drop (x1 rt) choppedD)
+  chopAndMakeRow recWidth (width - recWidth) (V.drop (x1 rt) choppedD)
   where recWidth = x2 rt - x1 rt + 1
         choppedD = chopOfTopAndBottom (y1 rt) (y2 rt) width d
 
@@ -192,7 +191,7 @@ getRectangleFromCols cMin cMax rMin rMax = Rectangle cMin rMin cMax rMax
 
 chopOfTopAndBottom :: Int -> Int -> Int -> V.Vector PixelRGBA8 -> V.Vector PixelRGBA8
 chopOfTopAndBottom rMin rMax iw d = v
-  where v = V.drop (traceShow dro dro) $ V.take (traceShow iw tak) d
+  where v = V.drop dro $ V.take tak d
         tak = (rMax+1) * iw
         dro = iw * rMin
 
@@ -202,10 +201,8 @@ writeRectangle mmg vc rt =
   writeRow (x1 rt) (x2 rt) (x1 rt) (y1 rt) (y2 rt) vc mmg
   where
     writeRow c c' ic r r' v mimg
-      -- | VS.length (traceShow ("nn: " ++ show nn ++ " n: " ++ show n ++ " m: " ++ show m) d) == 0 = V.fromList $ toList acc
         | V.length v == 0 = unsafeFreezeImage mimg
-        | c > (traceShow ("c:" ++show c ++ "c':" ++show c' ++ "ic:" ++show ic ++ "r:" ++show r ++ "r':" ++show r' ++ "vl:" ++show (V.length v))
-          c') = writeRow ic c' ic (r + 1) r' (V.drop (c'-ic+1) v) mimg
+        | c > c' = writeRow ic c' ic (r + 1) r' (V.drop (c'-ic+1) v) mimg
         | otherwise = do
             writePixel mimg c r (v V.! (c - ic))
             writeRow (c + 1) c' ic r r' v mimg
@@ -232,8 +229,7 @@ makeHPartsSortedImage ch ImgMask {..} f img@Image {..} = runST $ do
   let c = case ch < 1 || ch > height of
         True  -> height
         False -> ch
-  --let chunkHeight = height `div` (traceShow (imageHeight, imageWidth, height, width, ct ) c)
-  let chunkHeight = height `div` (traceShow (show (V.length cutoutData) ++ "---" ++ show ct) c)
+  let chunkHeight = height `div` c
   go 0 chunkHeight cutoutData height width (x1 ct) (y1 ct) mimg
   where
     go r chh d h w offx offy mimg
@@ -241,10 +237,9 @@ makeHPartsSortedImage ch ImgMask {..} f img@Image {..} = runST $ do
       | otherwise = do
           let rows = if chh * 2 > h - r then h - r else chh
           let rt = getRectangleFromCols 0 (w - 1 ) r (r + rows -1)
-          let dd = getRectangleAsRow w d (traceShow ("dddd-" ++ show rt ++ "www" ++ show w ++ " l " ++show (V.length d) ++ " h " ++ show h ++ " r " ++ show r ) rt)
-              --sortedChunk = dd
-              sortedChunk =  V.modify (VA.sortBy f) (traceShow "aaaa" dd)
-          void $ writeRectangle mimg sortedChunk (traceShow ("sdlkfjdslkfj" ++ show (V.length sortedChunk)) Rectangle (x1 rt + offx) (y1 rt + offy) (x2 rt + offx ) (y2 rt + offy))
+          let dd = getRectangleAsRow w d rt
+              sortedChunk =  V.modify (VA.sortBy f) dd
+          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + offx) (y1 rt + offy) (x2 rt + offx ) (y2 rt + offy))
           go (r + chh) chh d h w offx offy mimg
 
 -- | Sort the image partitioned into vertical partitions
@@ -268,7 +263,7 @@ makeVPartsSortedImage ch ImgMask {..} f img@Image {..} = runST $ do
   let c = case ch < 1 || ch > height of
         True  -> height
         False -> ch
-  let chunkWidth = width `div` (traceShow ("cutoutdata" ++ show (V.length cutoutData)) c)
+  let chunkWidth = width `div` c
   go 0 chunkWidth cutoutData height width (x1 ct) (y1 ct) mimg
   where
     go c chw d h w offx offy mimg
@@ -276,12 +271,9 @@ makeVPartsSortedImage ch ImgMask {..} f img@Image {..} = runST $ do
       | otherwise = do
           let rl = if chw * 2 > w - c then w - c else chw
           let rt = getRectangleFromCols c (c+rl-1) 0 (h-1)
-          let dd = getRectangleAsRow w d (traceShow ("dddd-" ++ show rt ++ show rl) rt)
-              --sortedChunk = dd
+          let dd = getRectangleAsRow w d rt
               sortedChunk = V.modify (VA.sortBy f) dd
-              -- sortedChunk = V.modify (VA.sortBy f) (traceShow (show chw ++ "aaaa" ) dd)
-          --void $ writeRectangle mimg sortedChunk rt
-          void $ writeRectangle mimg sortedChunk (traceShow ("sdlkfjdslkfj" ++ show (V.length sortedChunk)) Rectangle (x1 rt + offx) (y1 rt + offy) (x2 rt + offx ) (y2 rt + offy))
+          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + offx) (y1 rt + offy) (x2 rt + offx ) (y2 rt + offy))
           go (c + rl) chw d h w offx offy mimg
 
 -- | How to arrange pixels.
