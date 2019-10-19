@@ -235,8 +235,8 @@ writeRectangle mmg vc rt =
 makeSortedImage :: Direction -> Int -> ActualImgMask -> PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8
 makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
   case dir of
-    Vertical -> makeVPartsSortedImage (width `div` ch) cutoutData height width offx offy f img
-    Horizontal -> makeHPartsSortedImage (height `div` ch) cutoutData height width offx offy f img
+    Vertical -> makeVPartsSortedImage (width `div` (min width ch)) cutoutData height width offx offy f img
+    Horizontal -> makeHPartsSortedImage (height `div` (min height ch)) cutoutData height width offx offy f img
   where
     width = x2 ct - x1 ct + 1
     height = y2 ct - y1 ct + 1
