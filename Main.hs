@@ -169,8 +169,8 @@ writeSortedImage path orig sort = \case
       in baseDir <> "/" <> name <> suffix <> "." <> ext
 
 -- | Converting storable vector of word8 to seq of pixels
-convertToPXVec :: VS.Vector Word8 -> Seq.Seq PixelRGBA8
-convertToPXVec vec = go Seq.empty vec
+convertToPXSeq :: VS.Vector Word8 -> Seq.Seq PixelRGBA8
+convertToPXSeq vec = go Seq.empty vec
   where
     go !acc !d
       | VS.length d == 0    = acc
@@ -239,8 +239,7 @@ makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
     width = x2 ct - x1 ct + 1
     height = y2 ct - y1 ct + 1
     cutoutData = getRectangleAsRow imageWidth pxData ct
-    -- pxData = convertToPXVec (Seq.fromList (VS.toList imageData))
-    pxData = convertToPXVec imageData
+    pxData = convertToPXSeq imageData
     ct = getRectangleFromCols cMin cMax rMin rMax
     offx = x1 ct
     offy = y1 ct
