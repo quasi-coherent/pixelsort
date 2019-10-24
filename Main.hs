@@ -168,16 +168,16 @@ writeSortedImage path orig sort = \case
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
 
--- | Converting storable vector of word8 to vector of pixels
-convertToPXVec :: Seq.Seq Word8 -> Seq.Seq PixelRGBA8
-convertToPXVec = go Seq.empty
+-- | Converting storable vector of word8 to seq of pixels
+convertToPXVec :: VS.Vector Word8 -> Seq.Seq PixelRGBA8
+convertToPXVec vec = go Seq.empty vec
   where
     go !acc !d
-      | Seq.length d == 0    = acc
+      | VS.length d == 0    = acc
       | otherwise =
-        go (acc Seq.|> makePixel (Seq.take 4 d)) (Seq.drop 4 d)
+        go (acc Seq.|> makePixel (VS.take 4 d)) (VS.drop 4 d)
 
-    makePixel d = PixelRGBA8 (Seq.index d 0) (Seq.index d 1) (Seq.index d 2) (Seq.index d 3)
+    makePixel d = PixelRGBA8 (d VS.! 0) (d VS.! 1) (d VS.! 2) (d VS.! 3)
 
 
 -- | Take n pixels and skip m of vector of pixels.
@@ -193,7 +193,7 @@ chopAndMakeRow = go Seq.empty 0
       | Seq.length d == 0 = acc
       | n == 0 = go acc nn nn m (Seq.drop m d)
       | otherwise =
-        go (acc Seq.|> (Seq.index d 0)) (max nn n) (n-1) m (Seq.drop 1 d)
+        go (acc Seq.|> Seq.index d 0) (max nn n) (n-1) m (Seq.drop 1 d)
 
 
 -- | Cut out rectangle out of picture of width `width`.
@@ -233,13 +233,14 @@ writeRectangle mmg vc rt =
 makeSortedImage :: Direction -> Int -> ActualImgMask -> PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8
 makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
   case dir of
-    Vertical -> makeVPartsSortedImage (width `div` (min width ch)) cutoutData height width offx offy f img
-    Horizontal -> makeHPartsSortedImage (height `div` (min height ch)) cutoutData height width offx offy f img
+    Vertical -> makeVPartsSortedImage (width `div` min width ch) cutoutData height width offx offy f img
+    Horizontal -> makeHPartsSortedImage (height `div` min height ch) cutoutData height width offx offy f img
   where
     width = x2 ct - x1 ct + 1
     height = y2 ct - y1 ct + 1
     cutoutData = getRectangleAsRow imageWidth pxData ct
-    pxData = convertToPXVec (Seq.fromList (VS.toList imageData))
+    -- pxData = convertToPXVec (Seq.fromList (VS.toList imageData))
+    pxData = convertToPXVec imageData
     ct = getRectangleFromCols cMin cMax rMin rMax
     offx = x1 ct
     offy = y1 ct
