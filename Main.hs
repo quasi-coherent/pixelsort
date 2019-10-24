@@ -12,17 +12,15 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Primitive
 import           Control.Monad.ST
-import           Data.Foldable (toList)
 import           Data.List.Split
 import           Data.Maybe
 import qualified Data.Sequence as Seq
-import qualified Data.Vector as V
-import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
 import           Data.Word (Word8)
 import           Options.Applicative
 import           System.FilePath.Lens
 import           System.Random
+
 
 
 main :: IO ()
@@ -171,15 +169,15 @@ writeSortedImage path orig sort = \case
       in baseDir <> "/" <> name <> suffix <> "." <> ext
 
 -- | Converting storable vector of word8 to vector of pixels
-convertToPXVec :: VS.Vector Word8 -> V.Vector PixelRGBA8
+convertToPXVec :: Seq.Seq Word8 -> Seq.Seq PixelRGBA8
 convertToPXVec = go Seq.empty
   where
     go !acc !d
-      | VS.length d == 0    = V.fromList $ toList acc
+      | Seq.length d == 0    = acc
       | otherwise =
-        go (acc Seq.|> makePixel (VS.take 4 d)) (VS.drop 4 d)
+        go (acc Seq.|> makePixel (Seq.take 4 d)) (Seq.drop 4 d)
 
-    makePixel d = PixelRGBA8 (d VS.! 0) (d VS.! 1) (d VS.! 2) (d VS.! 3)
+    makePixel d = PixelRGBA8 (Seq.index d 0) (Seq.index d 1) (Seq.index d 2) (Seq.index d 3)
 
 
 -- | Take n pixels and skip m of vector of pixels.
@@ -187,22 +185,22 @@ convertToPXVec = go Seq.empty
 chopAndMakeRow
   :: Int
   -> Int
-  -> V.Vector PixelRGBA8
-  -> V.Vector PixelRGBA8
+  -> Seq.Seq PixelRGBA8
+  -> Seq.Seq PixelRGBA8
 chopAndMakeRow = go Seq.empty 0
   where
     go !acc !nn !n !m !d
-      | V.length d == 0 = V.fromList $ toList acc
-      | n == 0 = go acc nn nn m (V.drop m d)
+      | Seq.length d == 0 = acc
+      | n == 0 = go acc nn nn m (Seq.drop m d)
       | otherwise =
-        go (acc Seq.|> (d V.! 0)) (max nn n) (n-1) m (V.drop 1 d)
+        go (acc Seq.|> (Seq.index d 0)) (max nn n) (n-1) m (Seq.drop 1 d)
 
 
 -- | Cut out rectangle out of picture of width `width`.
 -- | Both input picture and output are represented as vector of pixels.
-getRectangleAsRow :: Int -> V.Vector PixelRGBA8 -> Rectangle -> V.Vector PixelRGBA8
+getRectangleAsRow :: Int -> Seq.Seq PixelRGBA8 -> Rectangle -> Seq.Seq PixelRGBA8
 getRectangleAsRow width d rt =
-  chopAndMakeRow recWidth (width - recWidth) (V.drop (x1 rt) choppedD)
+  chopAndMakeRow recWidth (width - recWidth) (Seq.drop (x1 rt) choppedD)
   where recWidth = x2 rt - x1 rt + 1
         choppedD = chopOfTopAndBottom (y1 rt) (y2 rt) width d
 
@@ -212,23 +210,23 @@ getRectangleFromCols cMin cMax rMin rMax = Rectangle cMin rMin cMax rMax
 
 -- | Chop off rMin from beginning and rMax from the end of the picture of width `width`
 -- | Both input picture and output are represented as vector of pixels.
-chopOfTopAndBottom :: Int -> Int -> Int -> V.Vector PixelRGBA8 -> V.Vector PixelRGBA8
+chopOfTopAndBottom :: Int -> Int -> Int -> Seq.Seq PixelRGBA8 -> Seq.Seq PixelRGBA8
 chopOfTopAndBottom rMin rMax width d = v
-  where v = V.drop dro $ V.take tak d
+  where v = Seq.drop dro $ Seq.take tak d
         tak = (rMax+1) * width
         dro = width * rMin
 
 -- | Write vc vector of pixels of Rectangle rt dimensions into mutable img mmg
 writeRectangle :: (Control.Monad.Primitive.PrimMonad m, Pixel a)
-  => MutableImage (Control.Monad.Primitive.PrimState m) a -> V.Vector a -> Rectangle -> m (Image a)
+  => MutableImage (Control.Monad.Primitive.PrimState m) a -> Seq.Seq a -> Rectangle -> m (Image a)
 writeRectangle mmg vc rt =
   writeRow (x1 rt) (x2 rt) (x1 rt) (y1 rt) (y2 rt) vc mmg
   where
     writeRow c c' ic r r' v mimg
-        | V.length v == 0 = unsafeFreezeImage mimg
-        | c > c' = writeRow ic c' ic (r + 1) r' (V.drop (c'-ic+1) v) mimg
+        | Seq.length v == 0 = unsafeFreezeImage mimg
+        | c > c' = writeRow ic c' ic (r + 1) r' (Seq.drop (c'-ic+1) v) mimg
         | otherwise = do
-            writePixel mimg c r (v V.! (c - ic))
+            writePixel mimg c r (Seq.index v (c - ic))
             writeRow (c + 1) c' ic r r' v mimg
 
 -- | Make sorted image based on direction, chunk size, img mask and sorting funcion
@@ -241,7 +239,7 @@ makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
     width = x2 ct - x1 ct + 1
     height = y2 ct - y1 ct + 1
     cutoutData = getRectangleAsRow imageWidth pxData ct
-    pxData = convertToPXVec imageData
+    pxData = convertToPXVec (Seq.fromList (VS.toList imageData))
     ct = getRectangleFromCols cMin cMax rMin rMax
     offx = x1 ct
     offy = y1 ct
@@ -249,7 +247,7 @@ makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
 
 -- | Sort the image partitioned into horizontal partitions
 makeHPartsSortedImage :: Int
-                        -> V.Vector PixelRGBA8
+                        -> Seq.Seq PixelRGBA8
                         -> Int
                         -> Int
                         -> Int
@@ -267,13 +265,13 @@ makeHPartsSortedImage chunkHeight cutoutData height width offx offy f img = runS
           let rows = if chh * 2 > h - r then h - r else chh
           let rt = getRectangleFromCols 0 (w - 1 ) r (r + rows -1)
           let dd = getRectangleAsRow w d rt
-              sortedChunk =  V.modify (VA.sortBy f) dd
+              sortedChunk =  Seq.sortBy f dd
           void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
           go (r + chh) chh d h w ox oy mimg
 
 -- | Sort the image partitioned into vertical partitions
 makeVPartsSortedImage :: Int
-                        -> V.Vector PixelRGBA8
+                        -> Seq.Seq PixelRGBA8
                         -> Int
                         -> Int
                         -> Int
@@ -291,7 +289,7 @@ makeVPartsSortedImage chunkWidth cutoutData height width offx offy f img = runST
           let rl = if chw * 2 > w - c then w - c else chw
           let rt = getRectangleFromCols c (c+rl-1) 0 (h-1)
           let dd = getRectangleAsRow w d rt
-              sortedChunk = V.modify (VA.sortBy f) dd
+              sortedChunk = Seq.sortBy f dd
           void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
           go (c + rl) chw d h w ox oy mimg
 
