@@ -1,8 +1,7 @@
-{-# LANGUAGE BangPatterns              #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE BangPatterns    #-}
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
-{-# LANGUAGE ExistentialQuantification #-}
 
 module Main where
 
@@ -20,7 +19,6 @@ import           Data.Word (Word8)
 import           Options.Applicative
 import           System.FilePath.Lens
 import           System.Random
-
 
 
 main :: IO ()
@@ -60,7 +58,7 @@ main = do
       <*> flag'' Green (short 'g' <> help "Sort by green")
       <*> flag'' Blue (short 'b' <> help "Sort by blue")
       <*> flag'' Alpha (short 'a' <> help "Sort by alpha")
-      <*> flag'' Average (short 'M' <> help "Sort by average of pixel values")
+      <*> flag'' Average (long "average" <> help "Sort by average of pixel values")
       <*> flag'' Luminance (short 'L' <> help "Sort by luminance")
       <*> flag'' Hue (short 'H' <> help "Sort by hue")
       <*> flag'' Norm (short 'N' <> help "Sort by norm of the pixels considered as points in 4-dimensional space")
@@ -75,7 +73,8 @@ main = do
       <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting" <> metavar "INT")
       <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting" <> metavar "INT")
 
--- | Indexed from (0 0) - top left to (imgWidth-1 imgHeight-1) - bottom right
+
+-- | Indexed from the top left at `(0, 0)` to the bottom right at `(imgWidth - 1, imgHeight - 1)`.
 data Rectangle = Rectangle
   { x1 :: Int
   , y1 :: Int
@@ -83,10 +82,10 @@ data Rectangle = Rectangle
   , y2 :: Int
 } deriving (Show)
 
--- | Which direction are we sorting.
-data Direction
-  = Vertical | Horizontal
-  deriving (Eq, Show)
+
+-- | Which direction we are sorting.
+data Direction = Vertical | Horizontal deriving (Eq, Show)
+
 
 -- | The possible ways to sort a row.
 data SortOption
@@ -102,7 +101,8 @@ data ImgMask = ImgMask
   , imColMax :: Maybe Int
   } deriving (Eq, Show)
 
--- | The subset of the image to sort.
+
+-- | The resolved subset of the image to sort.
 data ActualImgMask = ActualImgMask
   { rMin :: Int
   , rMax :: Int
@@ -152,7 +152,7 @@ writeSortedImage path orig sort = \case
   Green     -> writePng (makeFileName path "-sorted-g") $ sort compareGreen orig
   Blue      -> writePng (makeFileName path "-sorted-b") $ sort compareBlue orig
   Alpha     -> writePng (makeFileName path "-sorted-a") $ sort compareAlpha orig
-  Average   -> writePng (makeFileName path "-sorted-M") $ sort compareAverage orig
+  Average   -> writePng (makeFileName path "-sorted-average") $ sort compareAverage orig
   Luminance -> writePng (makeFileName path "-sorted-L") $ sort compareLuminance orig
   Hue       -> writePng (makeFileName path "-sorted-H") $ sort compareHue orig
   Norm      -> writePng (makeFileName path "-sorted-N") $ sort compareNorm orig
@@ -168,20 +168,21 @@ writeSortedImage path orig sort = \case
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
 
--- | Converting storable vector of word8 to seq of pixels
+
+-- | Convert a 'VS.Vector' of 'Word8' to a 'Seq.Seq PixelRGBA8'.
 convertToPXSeq :: VS.Vector Word8 -> Seq.Seq PixelRGBA8
-convertToPXSeq vec = go Seq.empty vec
+convertToPXSeq = go Seq.empty
   where
     go !acc !d
-      | VS.length d == 0    = acc
-      | otherwise =
-        go (acc Seq.|> makePixel (VS.take 4 d)) (VS.drop 4 d)
+      | VS.length d == 0 = acc
+      | otherwise        = go (acc Seq.|> makePixel (VS.take 4 d)) (VS.drop 4 d)
 
     makePixel d = PixelRGBA8 (d VS.! 0) (d VS.! 1) (d VS.! 2) (d VS.! 3)
 
 
--- | Take n pixels and skip m of vector of pixels.
--- | Used to take column of n pixels from picture
+-- | Take n pixels and skip m of a vector of pixels.
+--
+-- Used to create a column of n pixels from picture.
 chopAndMakeRow
   :: Int
   -> Int
@@ -191,34 +192,45 @@ chopAndMakeRow = go Seq.empty 0
   where
     go !acc !nn !n !m !d
       | Seq.length d == 0 = acc
-      | n == 0 = go acc nn nn m (Seq.drop m d)
-      | otherwise =
-        go (acc Seq.|> Seq.index d 0) (max nn n) (n-1) m (Seq.drop 1 d)
+      | n == 0            = go acc nn nn m (Seq.drop m d)
+      | otherwise         = go (acc Seq.|> Seq.index d 0) (max nn n) (n-1) m (Seq.drop 1 d)
 
 
--- | Cut out rectangle out of picture of width `width`.
--- | Both input picture and output are represented as vector of pixels.
-getRectangleAsRow :: Int -> Seq.Seq PixelRGBA8 -> Rectangle -> Seq.Seq PixelRGBA8
+-- | Cut out a rectangle out of picture of width `width`.
+--
+-- Both input and output pictures are represented as a vector of pixels.
+getRectangleAsRow
+  :: Int
+  -> Seq.Seq PixelRGBA8
+  -> Rectangle
+  -> Seq.Seq PixelRGBA8
 getRectangleAsRow width d rt =
   chopAndMakeRow recWidth (width - recWidth) (Seq.drop (x1 rt) choppedD)
   where recWidth = x2 rt - x1 rt + 1
-        choppedD = chopOfTopAndBottom (y1 rt) (y2 rt) width d
+        choppedD = chopOffTopAndBottom (y1 rt) (y2 rt) width d
 
--- | Get Rectangle from columns
-getRectangleFromCols :: Int -> Int -> Int -> Int -> Rectangle
-getRectangleFromCols cMin cMax rMin rMax = Rectangle cMin rMin cMax rMax
 
--- | Chop off rMin from beginning and rMax from the end of the picture of width `width`
--- | Both input picture and output are represented as vector of pixels.
-chopOfTopAndBottom :: Int -> Int -> Int -> Seq.Seq PixelRGBA8 -> Seq.Seq PixelRGBA8
-chopOfTopAndBottom rMin rMax width d = v
-  where v = Seq.drop dro $ Seq.take tak d
-        tak = (rMax+1) * width
+-- | Chop off rMin from beginning and rMax from the end of the picture of width @width@.
+--
+-- Both input picture and output are represented as vector of pixels.
+chopOffTopAndBottom
+  :: Int
+  -> Int
+  -> Int
+  -> Seq.Seq PixelRGBA8
+  -> Seq.Seq PixelRGBA8
+chopOffTopAndBottom rMin rMax width d = Seq.drop dro $ Seq.take tak d
+  where tak = (rMax + 1) * width
         dro = width * rMin
 
--- | Write vc vector of pixels of Rectangle rt dimensions into mutable img mmg
-writeRectangle :: (Control.Monad.Primitive.PrimMonad m, Pixel a)
-  => MutableImage (Control.Monad.Primitive.PrimState m) a -> Seq.Seq a -> Rectangle -> m (Image a)
+
+-- | Write vc vector of pixels of Rectangle rt dimensions into mutable img @mmg@.
+writeRectangle
+  :: (PrimMonad m, Pixel a)
+  => MutableImage (PrimState m) a
+  -> Seq.Seq a
+  -> Rectangle
+  -> m (Image a)
 writeRectangle mmg vc rt =
   writeRow (x1 rt) (x2 rt) (x1 rt) (y1 rt) (y2 rt) vc mmg
   where
@@ -229,8 +241,15 @@ writeRectangle mmg vc rt =
             writePixel mimg c r (Seq.index v (c - ic))
             writeRow (c + 1) c' ic r r' v mimg
 
--- | Make sorted image based on direction, chunk size, img mask and sorting funcion
-makeSortedImage :: Direction -> Int -> ActualImgMask -> PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8
+
+-- | Make sorted image based on direction, chunk size, image mask and sorting funcion.
+makeSortedImage
+  :: Direction
+  -> Int
+  -> ActualImgMask
+  -> PixelOrdering
+  -> Image PixelRGBA8
+  -> Image PixelRGBA8
 makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
   case dir of
     Vertical -> makeVPartsSortedImage (width `div` min width ch) cutoutData height width offx offy f img
@@ -240,21 +259,22 @@ makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
     height = y2 ct - y1 ct + 1
     cutoutData = getRectangleAsRow imageWidth pxData ct
     pxData = convertToPXSeq imageData
-    ct = getRectangleFromCols cMin cMax rMin rMax
+    ct = Rectangle cMin cMax rMin rMax
     offx = x1 ct
     offy = y1 ct
 
 
--- | Sort the image partitioned into horizontal partitions
-makeHPartsSortedImage :: Int
-                        -> Seq.Seq PixelRGBA8
-                        -> Int
-                        -> Int
-                        -> Int
-                        -> Int
-                        -> (PixelRGBA8 -> PixelRGBA8 -> Ordering)
-                        -> Image PixelRGBA8
-                        -> Image PixelRGBA8
+-- | Sort the image partitioned into horizontal partitions.
+makeHPartsSortedImage
+  :: Int
+  -> Seq.Seq PixelRGBA8
+  -> Int
+  -> Int
+  -> Int
+  -> Int
+  -> (PixelRGBA8 -> PixelRGBA8 -> Ordering)
+  -> Image PixelRGBA8
+  -> Image PixelRGBA8
 makeHPartsSortedImage chunkHeight cutoutData height width offx offy f img = runST $ do
   mimg <- unsafeThawImage img
   go 0 chunkHeight cutoutData height width offx offy mimg
@@ -263,22 +283,24 @@ makeHPartsSortedImage chunkHeight cutoutData height width offx offy f img = runS
       | r + 1 > h = unsafeFreezeImage mimg
       | otherwise = do
           let rows = if chh * 2 > h - r then h - r else chh
-          let rt = getRectangleFromCols 0 (w - 1 ) r (r + rows -1)
-          let dd = getRectangleAsRow w d rt
+              rt = Rectangle 0 (w - 1) r (r + rows - 1)
+              dd = getRectangleAsRow w d rt
               sortedChunk =  Seq.sortBy f dd
-          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
+          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox) (y2 rt + oy))
           go (r + chh) chh d h w ox oy mimg
 
--- | Sort the image partitioned into vertical partitions
-makeVPartsSortedImage :: Int
-                        -> Seq.Seq PixelRGBA8
-                        -> Int
-                        -> Int
-                        -> Int
-                        -> Int
-                        -> (PixelRGBA8 -> PixelRGBA8 -> Ordering)
-                        -> Image PixelRGBA8
-                        -> Image PixelRGBA8
+
+-- | Sort the image partitioned into vertical partitions.
+makeVPartsSortedImage
+  :: Int
+  -> Seq.Seq PixelRGBA8
+  -> Int
+  -> Int
+  -> Int
+  -> Int
+  -> (PixelRGBA8 -> PixelRGBA8 -> Ordering)
+  -> Image PixelRGBA8
+  -> Image PixelRGBA8
 makeVPartsSortedImage chunkWidth cutoutData height width offx offy f img = runST $ do
   mimg <- unsafeThawImage img
   go 0 chunkWidth cutoutData height width offx offy mimg
@@ -287,11 +309,12 @@ makeVPartsSortedImage chunkWidth cutoutData height width offx offy f img = runST
       | c + 1 > w = unsafeFreezeImage mimg
       | otherwise = do
           let rl = if chw * 2 > w - c then w - c else chw
-          let rt = getRectangleFromCols c (c+rl-1) 0 (h-1)
-          let dd = getRectangleAsRow w d rt
+              rt = Rectangle c (c + rl - 1) 0 (h - 1)
+              dd = getRectangleAsRow w d rt
               sortedChunk = Seq.sortBy f dd
-          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
+          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox) (y2 rt + oy))
           go (c + rl) chw d h w ox oy mimg
+
 
 -- | How to arrange pixels.
 type PixelOrdering = PixelRGBA8 -> PixelRGBA8 -> Ordering
