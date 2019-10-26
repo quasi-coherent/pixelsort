@@ -7,9 +7,9 @@ Full list of options:
 ``` bash
 pixelsort
 
-Usage: pixelsort --file ARG [--row-min ARG] [--row-max ARG] [--col-min ARG]
-                 [--col-max ARG] [--unbroken] [-r] [-g] [-b] [-a] [-M] [-L] [-H]
-                 [-N] [-S] [--rand]
+Usage: pixelsort --file ARG [--row-min INT] [--row-max INT] [--col-min INT]
+                 [--col-max INT] [--h-par INT] [--v-par INT] [-r] [-g] [-b] [-a]
+                 [--average] [-L] [-H] [-N] [-S] [--rand]
 
 Available options:
   -h,--help                Show this help text
@@ -18,13 +18,14 @@ Available options:
   --row-max INT            Row to end pixel sorting
   --col-min INT            Column to start pixel sorting
   --col-max INT            Column to end pixel sorting
+  --h-par INT              Sort image that is broken into X horizontal
+                           partitions
   --v-par INT              Sort image that is broken into X vertical partitions
-  --h-par INT              Sort image that is broken into X horizontal partitions
   -r                       Sort by red
   -g                       Sort by green
   -b                       Sort by blue
   -a                       Sort by alpha
-  -M                       Sort by average of pixel values
+  --average                Sort by average of pixel values
   -L                       Sort by luminance
   -H                       Sort by hue
   -N                       Sort by norm of the pixels considered as points in
