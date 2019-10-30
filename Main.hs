@@ -32,7 +32,7 @@ main = do
     (error $ "Image dimension is " <> show (imageHeight orig) <> " by " <> show (imageWidth orig) <> ". "
           <> "Row/column min/max must be constrained by these bounds, and min must be less than max.")
   let sortOptions = filter (/= Inactive)
-        [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
+        [cliRed, cliGreen, cliBlue, cliAlpha, cliAverage, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
   writeSortedImages cliPath orig
     (case (cliHParts, cliVParts) of
        (Just pars, _) -> makeSortedImage Horizontal pars mask
