@@ -12,7 +12,9 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Primitive
 import           Control.Monad.ST
-import           Data.List.Split
+import           Data.Foldable (toList)
+import qualified Data.List as L
+import qualified Data.List.Split as SP
 import           Data.Maybe
 import qualified Data.Sequence as Seq
 import qualified Data.Vector.Storable as VS
@@ -20,6 +22,7 @@ import           Data.Word (Word8)
 import           Options.Applicative
 import           System.FilePath.Lens
 import           System.Random
+
 
 
 
@@ -35,9 +38,9 @@ main = do
         [cliRed, cliGreen, cliBlue, cliAlpha, cliAverage, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
   writeSortedImages cliPath orig
     (case (cliHParts, cliVParts) of
-       (Just pars, _) -> makeSortedImage Horizontal pars mask
-       (_, Just pars) -> makeSortedImage Vertical pars mask
-       (_, _)         -> makeSortedImage Horizontal (imageHeight orig) mask)
+       (Just pars, _) -> makeSortedImage Horizontal cliPixels pars mask
+       (_, Just pars) -> makeSortedImage Vertical cliPixels pars mask
+       (_, _)         -> makeSortedImage Horizontal cliPixels (imageHeight orig) mask)
     sortOptions
   where
     actualMask ImgMask {..} orig =
@@ -56,6 +59,7 @@ main = do
       <*> parseImgMask
       <*> optional (option auto $ long "h-par" <> help "Sort image that is broken into X horizontal partitions" <> metavar "INT")
       <*> optional (option auto $ long "v-par" <> help "Sort image that is broken into X vertical partitions" <> metavar "INT")
+      <*> (option auto $ long "pixels" <> help "Take X pixels at a time for sorting and compare their avg values" <> showDefault <> value 1 <> metavar "INT")
       <*> flag'' Red (short 'r' <> help "Sort by red")
       <*> flag'' Green (short 'g' <> help "Sort by green")
       <*> flag'' Blue (short 'b' <> help "Sort by blue")
@@ -117,6 +121,7 @@ data CLI = CLI
   , cliMask      :: ImgMask
   , cliHParts    :: Maybe Int
   , cliVParts    :: Maybe Int
+  , cliPixels    :: Int
   , cliRed       :: SortOption
   , cliGreen     :: SortOption
   , cliBlue      :: SortOption
@@ -163,14 +168,14 @@ writeSortedImage path orig sort = \case
   where
     makeFileName imgPath suffix =
       let baseDir     = imgPath ^. directory
-          [name, ext] = case splitOn "." $ imgPath ^. filename of
+          [name, ext] = case SP.splitOn "." $ imgPath ^. filename of
             (n:x:_) -> [n, x]
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
 
 -- | Converting storable vector of word8 to seq of pixels
 convertToPXSeq :: VS.Vector Word8 -> Seq.Seq PixelRGBA8
-convertToPXSeq vec = go Seq.empty vec
+convertToPXSeq = go Seq.empty
   where
     go !acc !d
       | VS.length d == 0    = acc
@@ -230,11 +235,11 @@ writeRectangle mmg vc rt =
             writeRow (c + 1) c' ic r r' v mimg
 
 -- | Make sorted image based on direction, chunk size, img mask and sorting funcion
-makeSortedImage :: Direction -> Int -> ActualImgMask -> PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8
-makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
+makeSortedImage :: Direction -> Int -> Int -> ActualImgMask -> PixelOrdering -> Image PixelRGBA8 -> Image PixelRGBA8
+makeSortedImage dir pix ch ActualImgMask {..} f img@Image {..} =
   case dir of
-    Vertical -> makeVPartsSortedImage (width `div` min width ch) cutoutData height width offx offy f img
-    Horizontal -> makeHPartsSortedImage (height `div` min height ch) cutoutData height width offx offy f img
+    Vertical -> makeVPartsSortedImage (width `div` min width ch) pix cutoutData height width offx offy f img
+    Horizontal -> makeHPartsSortedImage (height `div` min height ch) pix cutoutData height width offx offy f img
   where
     width = x2 ct - x1 ct + 1
     height = y2 ct - y1 ct + 1
@@ -247,15 +252,16 @@ makeSortedImage dir ch ActualImgMask {..} f img@Image {..} =
 
 -- | Sort the image partitioned into horizontal partitions
 makeHPartsSortedImage :: Int
+                        -> Int
                         -> Seq.Seq PixelRGBA8
                         -> Int
                         -> Int
                         -> Int
                         -> Int
-                        -> (PixelRGBA8 -> PixelRGBA8 -> Ordering)
+                        -> PixelOrdering
                         -> Image PixelRGBA8
                         -> Image PixelRGBA8
-makeHPartsSortedImage chunkHeight cutoutData height width offx offy f img = runST $ do
+makeHPartsSortedImage chunkHeight pix cutoutData height width offx offy f img = runST $ do
   mimg <- unsafeThawImage img
   go 0 chunkHeight cutoutData height width offx offy mimg
   where
@@ -265,21 +271,23 @@ makeHPartsSortedImage chunkHeight cutoutData height width offx offy f img = runS
           let rows = if chh * 2 > h - r then h - r else chh
           let rt = getRectangleFromCols 0 (w - 1 ) r (r + rows -1)
           let dd = getRectangleAsRow w d rt
-              sortedChunk =  Seq.sortBy f dd
+          let splitdd = SP.chunksOf pix (toList dd)
+              sortedChunk =  Seq.fromList (concat (L.sortBy (orderMultiplePixels f) splitdd))
           void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
           go (r + chh) chh d h w ox oy mimg
 
 -- | Sort the image partitioned into vertical partitions
 makeVPartsSortedImage :: Int
+                        -> Int
                         -> Seq.Seq PixelRGBA8
                         -> Int
                         -> Int
                         -> Int
                         -> Int
-                        -> (PixelRGBA8 -> PixelRGBA8 -> Ordering)
+                        -> PixelOrdering
                         -> Image PixelRGBA8
                         -> Image PixelRGBA8
-makeVPartsSortedImage chunkWidth cutoutData height width offx offy f img = runST $ do
+makeVPartsSortedImage chunkWidth pix cutoutData height width offx offy f img = runST $ do
   mimg <- unsafeThawImage img
   go 0 chunkWidth cutoutData height width offx offy mimg
   where
@@ -289,9 +297,20 @@ makeVPartsSortedImage chunkWidth cutoutData height width offx offy f img = runST
           let rl = if chw * 2 > w - c then w - c else chw
           let rt = getRectangleFromCols c (c+rl-1) 0 (h-1)
           let dd = getRectangleAsRow w d rt
-              sortedChunk = Seq.sortBy f dd
+          let splitdd = SP.chunksOf pix (toList dd)
+              sortedChunk =  Seq.fromList (concat (L.sortBy (orderMultiplePixels f) splitdd))
           void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
           go (c + rl) chw d h w ox oy mimg
+
+-- | How to arrange multiple pixels.
+orderMultiplePixels :: PixelOrdering -> [PixelRGBA8] -> [PixelRGBA8] -> Ordering
+orderMultiplePixels po pixs1 pixs2 = po (avgPix pixs1) (avgPix pixs2)
+  where avgPix :: [PixelRGBA8] -> PixelRGBA8
+        avgPix pixs = (\(r, g, b, a) -> PixelRGBA8 (r + c) (g + c) (b + c) (fromIntegral (a + c))) (sumPix pixs)
+                          where c = cntPix pixs
+        sumPix = foldl (\(r, g, b, a)(PixelRGBA8 r' g' b' a') -> (r + r', g + g', b + b', a + a')) (0, 0, 0, 0)
+        cntPix :: [PixelRGBA8] -> Word8
+        cntPix pixs = fromIntegral (length pixs)
 
 -- | How to arrange pixels.
 type PixelOrdering = PixelRGBA8 -> PixelRGBA8 -> Ordering
