@@ -12,7 +12,7 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Primitive
 import           Control.Monad.ST
-import           Data.Foldable (toList)
+import           Data.Foldable
 import qualified Data.List as L
 import qualified Data.List.Split as SP
 import           Data.Maybe
@@ -59,7 +59,7 @@ main = do
       <*> parseImgMask
       <*> optional (option auto $ long "h-par" <> help "Sort image that is broken into X horizontal partitions" <> metavar "INT")
       <*> optional (option auto $ long "v-par" <> help "Sort image that is broken into X vertical partitions" <> metavar "INT")
-      <*> (option auto $ long "pixels" <> help "Take X pixels at a time for sorting and compare their avg values" <> showDefault <> value 1 <> metavar "INT")
+      <*> option auto (long "pixels" <> help "Take X pixels at a time for sorting and compare their avg values" <> showDefault <> value 1 <> metavar "INT")
       <*> flag'' Red (short 'r' <> help "Sort by red")
       <*> flag'' Green (short 'g' <> help "Sort by green")
       <*> flag'' Blue (short 'b' <> help "Sort by blue")

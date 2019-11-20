@@ -25,9 +25,9 @@ executables:
     - JuicyPixels
     - lens
     - optparse-applicative
+    - primitive
     - random
     - split
     - vector
     - vector-algorithms
     - containers
-    - primitive

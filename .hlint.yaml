@@ -1,0 +1,3 @@
+# HLint configuration file
+##########################
+- ignore: {name: "Reduce duplication", within: Main}
