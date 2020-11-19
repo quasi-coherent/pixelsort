@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "./Main.hs"
+      component: "pixelsort:exe:pixelsort"
+
+dependencies:
+  - package.yaml
