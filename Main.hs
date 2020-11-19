@@ -1,8 +1,7 @@
-{-# LANGUAGE BangPatterns              #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE BangPatterns    #-}
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
-{-# LANGUAGE ExistentialQuantification #-}
 
 module Main where
 
@@ -10,13 +9,13 @@ import           Codec.Picture
 import           Codec.Picture.Types
 import           Control.Lens
 import           Control.Monad
-import           Control.Monad.Primitive
 import           Control.Monad.ST
-import           Data.Foldable
-import qualified Data.List as L
-import qualified Data.List.Split as SP
+import           Data.Foldable (toList)
+import           Data.List.Split
 import           Data.Maybe
 import qualified Data.Sequence as Seq
+import qualified Data.Vector as V
+import qualified Data.Vector.Algorithms.Intro as VA
 import qualified Data.Vector.Storable as VS
 import           Data.Word (Word8)
 import           Options.Applicative
@@ -24,42 +23,32 @@ import           System.FilePath.Lens
 import           System.Random
 
 
-
-
 main :: IO ()
 main = do
   CLI {..} <- execParser cliParser
   orig <- either (error "Couldn't read image") convertRGBA8 <$> readImage cliPath
-  let mask = actualMask cliMask orig
-  when (invalidMask mask orig)
+  when (invalidMask cliMask orig)
     (error $ "Image dimension is " <> show (imageHeight orig) <> " by " <> show (imageWidth orig) <> ". "
-          <> "Row/column min/max must be constrained by these bounds, and min must be less than max.")
+          <> "Row/column min/max must be constrained by these bounds, and min must be less than, or equal to, max.")
   let sortOptions = filter (/= Inactive)
-        [cliRed, cliGreen, cliBlue, cliAlpha, cliAverage, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
+        [cliRed, cliGreen, cliBlue, cliAlpha, cliLuminance, cliHue, cliNorm, cliStep, cliRandom]
   writeSortedImages cliPath orig
-    (case (cliHParts, cliVParts) of
-       (Just pars, _) -> makeSortedImage Horizontal cliPixels pars mask
-       (_, Just pars) -> makeSortedImage Vertical cliPixels pars mask
-       (_, _)         -> makeSortedImage Horizontal cliPixels (imageHeight orig) mask)
+    (if cliUnbroken then makeUnbrokenSortedImage else makeSortedImage cliMask)
     sortOptions
   where
-    actualMask ImgMask {..} orig =
+    invalidMask ImgMask {..} orig =
       let rMin = fromMaybe 0 imRowMin
-          rMax = fromMaybe (imageHeight orig - 1) imRowMax
+          rMax = fromMaybe (imageHeight orig) imRowMax
           cMin = fromMaybe 0 imColMin
-          cMax = fromMaybe (imageWidth orig -1) imColMax
-      in ActualImgMask rMin rMax cMin cMax
-    invalidMask ActualImgMask {..} orig =
-      rMin < 0 || rMax >= imageHeight orig || cMin < 0 || cMax >= imageWidth orig || (cMin > cMax || rMin > rMax)
+          cMax = fromMaybe (imageWidth orig) imColMax
+      in rMin < 0 || rMax > imageHeight orig || cMin < 0 || cMax > imageWidth orig || (cMin > cMax || rMin > rMax)
 
     cliParser = info (helper <*> parseCli) (header "pixelsort")
 
     parseCli = CLI
       <$> strOption (long "file" <> help "Image to sort")
       <*> parseImgMask
-      <*> optional (option auto $ long "h-par" <> help "Sort image that is broken into X horizontal partitions" <> metavar "INT")
-      <*> optional (option auto $ long "v-par" <> help "Sort image that is broken into X vertical partitions" <> metavar "INT")
-      <*> option auto (long "pixels" <> help "Take X pixels at a time for sorting and compare their avg values" <> showDefault <> value 1 <> metavar "INT")
+      <*> switch (long "unbroken" <> help "Sort image that is not broken into rows")
       <*> flag'' Red (short 'r' <> help "Sort by red")
       <*> flag'' Green (short 'g' <> help "Sort by green")
       <*> flag'' Blue (short 'b' <> help "Sort by blue")
@@ -74,25 +63,10 @@ main = do
     flag'' opt modOpts = flag' opt modOpts <|> pure Inactive
 
     parseImgMask = ImgMask
-      <$> optional (option auto $ long "row-min" <> help "Row to start pixel sorting" <> metavar "INT")
-      <*> optional (option auto $ long "row-max" <> help "Row to end pixel sorting" <> metavar "INT")
-      <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting" <> metavar "INT")
-      <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting" <> metavar "INT")
-
-
--- | Indexed from (0 0) - top left to (imgWidth-1 imgHeight-1) - bottom right
-data Rectangle = Rectangle
-  { x1 :: Int
-  , y1 :: Int
-  , x2 :: Int
-  , y2 :: Int
-} deriving (Show)
-
-
--- | Which direction are we sorting.
-data Direction
-  = Vertical | Horizontal
-  deriving (Eq, Show)
+      <$> optional (option auto $ long "row-min" <> help "Row to start pixel sorting")
+      <*> optional (option auto $ long "row-max" <> help "Row to end pixel sorting")
+      <*> optional (option auto $ long "col-min" <> help "Column to start pixel sorting")
+      <*> optional (option auto $ long "col-max" <> help "Column to end pixel sorting")
 
 
 -- | The possible ways to sort a row.
@@ -110,22 +84,11 @@ data ImgMask = ImgMask
   } deriving (Eq, Show)
 
 
--- | The subset of the image to sort.
-data ActualImgMask = ActualImgMask
-  { rMin :: Int
-  , rMax :: Int
-  , cMin :: Int
-  , cMax :: Int
-  } deriving (Eq, Show)
-
-
 -- | CLI.
 data CLI = CLI
   { cliPath      :: FilePath
   , cliMask      :: ImgMask
-  , cliHParts    :: Maybe Int
-  , cliVParts    :: Maybe Int
-  , cliPixels    :: Int
+  , cliUnbroken  :: Bool
   , cliRed       :: SortOption
   , cliGreen     :: SortOption
   , cliBlue      :: SortOption
@@ -172,173 +135,78 @@ writeSortedImage path orig sort = \case
   where
     makeFileName imgPath suffix =
       let baseDir     = imgPath ^. directory
-          [name, ext] = case SP.splitOn "." $ imgPath ^. filename of
+          [name, ext] = case splitOn "." $ imgPath ^. filename of
             (n:x:_) -> [n, x]
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
 
 
--- | Converting storable vector of 'Word8' to seq of pixels.
-convertToPXSeq
-  :: VS.Vector Word8
-  -> Seq.Seq PixelRGBA8
-convertToPXSeq = go Seq.empty
+-- | Sort the image with the given ordering.
+makeSortedImage
+  :: ImgMask -- ^ Subset of the image to sort.
+  -> PixelOrdering -- ^ Sorting function.
+  -> Image PixelRGBA8 -- ^ Image to sort.
+  -> Image PixelRGBA8
+makeSortedImage ImgMask {..} f img@Image {..} = runST $ do
+  mimg <- unsafeThawImage img
+  let rMin = fromMaybe 0 imRowMin
+      rMax = fromMaybe imageHeight imRowMax
+      cMin = fromMaybe 0 imColMin
+      cMax = fromMaybe imageWidth imColMax
+  go rMin rMax cMin cMax imageWidth imageData mimg
   where
-    go !acc !d
-      | VS.length d == 0 = acc
-      | otherwise        = go (acc Seq.|> makePixel (VS.take 4 d)) (VS.drop 4 d)
+    go r r' c c' iw d mimg
+      | r >= r' = unsafeFreezeImage mimg
+      | otherwise = do
+          let row = makeRow (4 * c') (VS.take (4 * c') d)
+              sortedRow = V.modify (VA.sortBy f) $ V.drop c row
+          void $ writeRow c c' c r sortedRow mimg
+          go (r + 1) r' c c' iw (VS.drop (4 * iw) d) mimg
+
+    writeRow c c' ic r v mimg
+      | c >= c' = unsafeFreezeImage mimg
+      | otherwise = do
+          writePixel mimg c r (v V.! (c - ic))
+          writeRow (c + 1) c' ic r v mimg
+
+
+-- | Sort the image without breaking it into rows of pixels.
+makeUnbrokenSortedImage
+  :: PixelOrdering -- ^ Sorting function.
+  -> Image PixelRGBA8 -- ^ Image to sort.
+  -> Image PixelRGBA8
+makeUnbrokenSortedImage f img@Image {..} = runST $ do
+  mimg <- unsafeThawImage img
+  let rawImage = makeRow (VS.length imageData) imageData
+      sortedImage = V.modify (VA.sortBy f) rawImage
+  go 0 sortedImage mimg
+  where
+    go r d mimg
+      | r >= imageHeight = unsafeFreezeImage mimg
+      | otherwise = do
+          void $ writeRow r 0 (V.take imageWidth d) mimg
+          go (r + 1) (V.drop imageWidth d) mimg
+
+    writeRow r c v mimg
+      | c >= imageWidth = unsafeFreezeImage mimg
+      | otherwise = do
+          writePixel mimg c r (v V.! c)
+          writeRow r (c + 1) v mimg
+
+
+-- | Make one row of 'PixelRGBA8's from the image's raw representation.
+makeRow
+  :: Int
+  -> VS.Vector Word8
+  -> V.Vector PixelRGBA8
+makeRow = go Seq.empty
+  where
+    go !acc !w !d
+      | w == 0    = V.fromList $ toList acc
+      | otherwise =
+        go (acc Seq.|> makePixel (VS.take 4 d)) (w - 4) (VS.drop 4 d)
 
     makePixel d = PixelRGBA8 (d VS.! 0) (d VS.! 1) (d VS.! 2) (d VS.! 3)
-
-
--- | Take n pixels and skip m of vector of pixels.
--- Used to take a column of n pixels from picture.
-chopAndMakeRow
-  :: Int
-  -> Int
-  -> Seq.Seq PixelRGBA8
-  -> Seq.Seq PixelRGBA8
-chopAndMakeRow = go Seq.empty 0
-  where
-    go !acc !nn !n !m !d
-      | Seq.length d == 0 = acc
-      | n == 0 = go acc nn nn m (Seq.drop m d)
-      | otherwise =
-        go (acc Seq.|> Seq.index d 0) (max nn n) (n-1) m (Seq.drop 1 d)
-
-
--- | Cut out rectangle out of picture of width `width`.
--- | Both input picture and output are represented as vector of pixels.
-getRectangleAsRow
-  :: Int
-  -> Seq.Seq PixelRGBA8
-  -> Rectangle
-  -> Seq.Seq PixelRGBA8
-getRectangleAsRow width d rt =
-  chopAndMakeRow recWidth (width - recWidth) (Seq.drop (x1 rt) choppedD)
-  where recWidth = x2 rt - x1 rt + 1
-        choppedD = chopOfTopAndBottom (y1 rt) (y2 rt) width d
-
-
--- | Chop off @rMin@ from beginning and @rMax@ from the end of the picture of width @width@.
--- Both input picture and output are represented as vector of pixels.
-chopOfTopAndBottom :: Int -> Int -> Int -> Seq.Seq PixelRGBA8 -> Seq.Seq PixelRGBA8
-chopOfTopAndBottom rMin rMax width d = v
-  where v = Seq.drop dro $ Seq.take tak d
-        tak = (rMax+1) * width
-        dro = width * rMin
-
-
--- | Write vc vector of pixels of Rectangle rt dimensions into mutable img mmg.
-writeRectangle
-  :: (PrimMonad m, Pixel a)
-  => MutableImage (PrimState m) a
-  -> Seq.Seq a
-  -> Rectangle
-  -> m (Image a)
-writeRectangle mmg vc rt =
-  writeRow (x1 rt) (x2 rt) (x1 rt) (y1 rt) (y2 rt) vc mmg
-  where
-    writeRow c c' ic r r' v mimg
-      | Seq.length v == 0 = unsafeFreezeImage mimg
-      | c > c' = writeRow ic c' ic (r + 1) r' (Seq.drop (c'-ic+1) v) mimg
-      | otherwise = do
-          writePixel mimg c r (Seq.index v (c - ic))
-          writeRow (c + 1) c' ic r r' v mimg
-
-
--- | Make sorted image based on direction, chunk size, img mask and sorting funcion
-makeSortedImage
-  :: Direction
-  -> Int
-  -> Int
-  -> ActualImgMask
-  -> PixelOrdering
-  -> Image PixelRGBA8
-  -> Image PixelRGBA8
-makeSortedImage dir pix ch ActualImgMask {..} f img@Image {..} =
-  case dir of
-    Vertical   -> makeVPartsSortedImage (width `div` min width ch) pix cutoutData height width offx offy f img
-    Horizontal -> makeHPartsSortedImage (height `div` min height ch) pix cutoutData height width offx offy f img
-  where
-    width = x2 ct - x1 ct + 1
-    height = y2 ct - y1 ct + 1
-    cutoutData = getRectangleAsRow imageWidth pxData ct
-    pxData = convertToPXSeq imageData
-    ct = Rectangle cMin cMax rMin rMax
-    offx = x1 ct
-    offy = y1 ct
-
-
--- | Sort the image partitioned into horizontal partitions.
-makeHPartsSortedImage
-  :: Int
-  -> Int
-  -> Seq.Seq PixelRGBA8
-  -> Int
-  -> Int
-  -> Int
-  -> Int
-  -> PixelOrdering
-  -> Image PixelRGBA8
-  -> Image PixelRGBA8
-makeHPartsSortedImage chunkHeight pix cutoutData height width offx offy f img = runST $ do
-  mimg <- unsafeThawImage img
-  go 0 chunkHeight cutoutData height width offx offy mimg
-  where
-    go r chh d h w ox oy mimg
-      | r + 1 > h = unsafeFreezeImage mimg
-      | otherwise = do
-          let rows = if chh * 2 > h - r then h - r else chh
-              rt = Rectangle 0 (w - 1 ) r (r + rows -1)
-              dd = getRectangleAsRow w d rt
-              splitdd = SP.chunksOf pix (toList dd)
-              sortedChunk =  Seq.fromList (concat (L.sortBy (orderMultiplePixels f) splitdd))
-          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
-          go (r + chh) chh d h w ox oy mimg
-
-
--- | Sort the image partitioned into vertical partitions
-makeVPartsSortedImage
-  :: Int
-  -> Int
-  -> Seq.Seq PixelRGBA8
-  -> Int
-  -> Int
-  -> Int
-  -> Int
-  -> PixelOrdering
-  -> Image PixelRGBA8
-  -> Image PixelRGBA8
-makeVPartsSortedImage chunkWidth pix cutoutData height width offx offy f img = runST $ do
-  mimg <- unsafeThawImage img
-  go 0 chunkWidth cutoutData height width offx offy mimg
-  where
-    go c chw d h w ox oy mimg
-      | c + 1 > w = unsafeFreezeImage mimg
-      | otherwise = do
-          let rl = if chw * 2 > w - c then w - c else chw
-              rt = Rectangle c (c+rl-1) 0 (h-1)
-              dd = getRectangleAsRow w d rt
-              splitdd = SP.chunksOf pix (toList dd)
-              sortedChunk =  Seq.fromList (concat (L.sortBy (orderMultiplePixels f) splitdd))
-          void $ writeRectangle mimg sortedChunk (Rectangle (x1 rt + ox) (y1 rt + oy) (x2 rt + ox ) (y2 rt + oy))
-          go (c + rl) chw d h w ox oy mimg
-
-
--- | How to arrange multiple pixels.
-orderMultiplePixels
-  :: PixelOrdering
-  -> [PixelRGBA8]
-  -> [PixelRGBA8]
-  -> Ordering
-orderMultiplePixels po pixs1 pixs2 = po (avgPix pixs1) (avgPix pixs2)
-  where avgPix :: [PixelRGBA8] -> PixelRGBA8
-        avgPix pixs = (\(r, g, b, a) -> PixelRGBA8 (r + c) (g + c) (b + c) (fromIntegral (a + c))) (sumPix pixs)
-                          where c = cntPix pixs
-        sumPix = foldl (\(r, g, b, a)(PixelRGBA8 r' g' b' a') -> (r + r', g + g', b + b', a + a')) (0, 0, 0, 0)
-        cntPix :: [PixelRGBA8] -> Word8
-        cntPix pixs = fromIntegral (length pixs)
 
 
 -- | How to arrange pixels.

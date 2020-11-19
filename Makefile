@@ -4,3 +4,7 @@ build:
 	stack build $(STACK_OPTS) --copy-bins
 dev:
 	ghcid --command "stack ghci pixelsort"
+
+.PHONY: nix-build
+nix-build:
+	nix-build -A exe
