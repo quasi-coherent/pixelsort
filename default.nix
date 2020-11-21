@@ -23,6 +23,7 @@ let
     buildInputs = with nixpkgs.haskellPackages; [
       ghcid
       hlint
+      hpack
       hsPkgs.cabal-install
       stack
       stylish-haskell

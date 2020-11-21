@@ -7,4 +7,5 @@ dev:
 
 .PHONY: nix-build
 nix-build:
+	hpack
 	nix-build -A exe
