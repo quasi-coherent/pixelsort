@@ -120,17 +120,16 @@ writeSortedImage
   -> SortOption -- ^ How to sort.
   -> IO ()
 writeSortedImage path orig sort = \case
-  Red       -> writePng (makeFileName path "-sorted-r") $ sort compareRed orig
-  Green     -> writePng (makeFileName path "-sorted-g") $ sort compareGreen orig
-  Blue      -> writePng (makeFileName path "-sorted-b") $ sort compareBlue orig
-  Alpha     -> writePng (makeFileName path "-sorted-a") $ sort compareAlpha orig
-  Average   -> writePng (makeFileName path "-sorted-M") $ sort compareAverage orig
-  Luminance -> writePng (makeFileName path "-sorted-L") $ sort compareLuminance orig
-  Hue       -> writePng (makeFileName path "-sorted-H") $ sort compareHue orig
-  Norm      -> writePng (makeFileName path "-sorted-N") $ sort compareNorm orig
-  Step      -> writePng (makeFileName path "-sorted-S") $ sort compareStep orig
-  Random    -> compareRandomly >>= \ord ->
-    writePng (makeFileName path "-sorted-rand") $ sort ord orig
+  Red       -> sortAndWritePng compareRed "-sorted-r"
+  Green     -> sortAndWritePng compareGreen "-sorted-g"
+  Blue      -> sortAndWritePng compareBlue "-sorted-b"
+  Alpha     -> sortAndWritePng compareAlpha "-sorted-a"
+  Average   -> sortAndWritePng compareAverage "-sorted-M"
+  Luminance -> sortAndWritePng compareLuminance "-sorted-L"
+  Hue       -> sortAndWritePng compareHue "-sorted-H"
+  Norm      -> sortAndWritePng compareNorm "-sorted-N"
+  Step      -> sortAndWritePng compareStep "-sorted-S"
+  Random    -> compareRandomly >>= flip sortAndWritePng "-sorted-rand"
   Inactive  -> error "Attempted to write a sorted image with no sort option provided."
   where
     makeFileName imgPath suffix =
@@ -139,6 +138,11 @@ writeSortedImage path orig sort = \case
             (n:x:_) -> [n, x]
             _       -> error "Invalid filename/extension."
       in baseDir <> "/" <> name <> suffix <> "." <> ext
+
+    sortAndWritePng ord suffix = do
+      let outPath = makeFileName path suffix
+      writePng outPath $ sort ord orig
+      putStrLn outPath
 
 
 -- | Sort the image with the given ordering.

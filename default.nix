@@ -24,6 +24,7 @@ let
       ghcid
       hlint
       hsPkgs.cabal-install
+      stack
       stylish-haskell
     ];
 
